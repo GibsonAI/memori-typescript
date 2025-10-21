@@ -9,7 +9,7 @@ generator client {
 }
 
 model ChatHistory {
-  id          String   @id @default(cuid())
+  id          String   @id @default("")
   userInput   String
   aiOutput    String
   model       String
@@ -26,7 +26,7 @@ model ChatHistory {
 }
 
 model ShortTermMemory {
-  id               String   @id @default(cuid())
+  id               String   @id @default("")
   chatId           String?
   processedData    Json
   importanceScore  Float    @default(0.5)
@@ -47,7 +47,7 @@ model ShortTermMemory {
 }
 
 model LongTermMemory {
-  id                    String   @id @default(cuid())
+  id                    String   @id @default("")
   originalChatId        String?
   processedData         Json
   importanceScore       Float    @default(0.5)

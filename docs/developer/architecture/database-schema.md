@@ -2,6 +2,21 @@
 
 Memorits stores all data in SQLite using Prisma. The schema lives in `prisma/schema.prisma` and is synchronised with the database via `npm run prisma:push`. This document walks through the real tables, indexes, and supporting infrastructure so you know exactly how data is laid out.
 
+## ID Generation Strategy
+
+Memorits uses **UUID v4** for all primary keys across the database for consistency with the application layer. UUIDs are generated in the application code using the `IdGenerator` utility class and explicitly set during record creation. This approach provides:
+
+- **Consistency**: Single ID format (UUID) across entire system
+- **Database Compatibility**: Better support for multiple database types
+- **Debugging**: Easier ID correlation across application layers
+- **Standard Compliance**: UUID is widely supported in database tooling
+
+The `IdGenerator` class provides methods for generating different types of IDs:
+- `generateId()` - Standard UUID v4
+- `generateMemoryId()` - Memory record ID
+- `generateChatId()` - Chat record ID
+- `generateSessionId()` - Session ID
+
 ## Core Tables
 
 ### `chat_history`
@@ -10,11 +25,11 @@ Stores raw conversations that feed the memory pipeline.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `id` | `String @id @default(cuid())` | Primary key used as the default `rowid` |
+| `id` | `String @id @default("")` | Primary key (UUID v4 generated in application) |
 | `userInput` / `aiOutput` | `String` | Raw text sent/received |
 | `model` | `String` | Model identifier recorded by `MemoriAI` |
 | `sessionId` | `String` | Generated per `MemoriAI` instance |
-| `namespace` | `String @default("default")` | Tenant/partition | 
+| `namespace` | `String @default("default")` | Tenant/partition |
 | `metadata` | `Json?` | Optional request metadata (temperature, etc.) |
 | Relationships | `ShortTermMemory[]`, `LongTermMemory[]` | Prisma relations |
 
@@ -24,7 +39,7 @@ The working context used for conscious mode and high-priority recall.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `id` | `String @id @default(cuid())` | Primary key |
+| `id` | `String @id @default("")` | Primary key (UUID v4 generated in application) |
 | `chatId` | `String?` | Optional foreign key to `chat_history.id` |
 | `processedData` | `Json` | Raw payload from `MemoryAgent` |
 | `importanceScore` | `Float @default(0.5)` | Numeric importance |
@@ -42,7 +57,7 @@ Permanent storage for processed memories.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `id` | `String @id @default(cuid())` |
+| `id` | `String @id @default("")` | Primary key (UUID v4 generated in application) |
 | `originalChatId` | `String?` | Links back to the source conversation |
 | `processedData` | `Json` | Full MemoryAgent payload |
 | `importanceScore` | `Float` | Cached numeric importance |
@@ -79,6 +94,26 @@ Permanent storage for processed memories.
 
 These helpers are exposed through `Memori` (`getIndexHealthReport`, `optimizeIndex`, `createIndexBackup`, `restoreIndexFromBackup`).
 
+## ID Generation Implementation
+
+The `IdGenerator` utility class (`src/core/infrastructure/database/utils/id-generator.ts`) handles all UUID generation:
+
+```typescript
+import { IdGenerator } from '../utils/id-generator';
+
+// Generate different types of IDs
+const memoryId = IdGenerator.generateMemoryId();
+const chatId = IdGenerator.generateChatId();
+const sessionId = IdGenerator.generateSessionId();
+
+// Validate UUID format
+if (IdGenerator.isValidUUID(someId)) {
+  // Handle valid UUID
+}
+```
+
+IDs are explicitly set during record creation in the database managers rather than relying on database auto-generation, ensuring consistency across different database systems.
+
 ## Working with Prisma
 
 - Update the schema by editing `prisma/schema.prisma`.
@@ -89,6 +124,7 @@ These helpers are exposed through `Memori` (`getIndexHealthReport`, `optimizeInd
   npm run prisma:generate
   ```
 
+- **Important**: After schema changes, always run both commands in sequence to ensure the Prisma Client is updated.
 - `DATABASE_URL` controls the SQLite file path; tests often use file-scoped temporary databases for isolation.
 
 ## Inspecting Data
@@ -101,4 +137,18 @@ sqlite3 memori.db "SELECT name FROM sqlite_master WHERE type = 'table';"
 sqlite3 memori.db "SELECT rowid, content FROM memory_fts LIMIT 5;"
 ```
 
-Knowing the actual schema helps when you build reporting dashboards, perform maintenance, or migrate the database to another engine. The Prisma models and supporting search infrastructure described above are the single source of truth for Memorits’ storage layer.
+**Note**: All `id` fields now contain UUID v4 format (e.g., `9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d`) instead of CUID format. This provides better consistency with the application layer and improved database compatibility.
+
+Knowing the actual schema helps when you build reporting dashboards, perform maintenance, or deploy the database to another engine. The Prisma models and supporting search infrastructure described above are the single source of truth for Memorits’ storage layer.
+
+## Design Benefits
+
+The UUID v4 implementation provides several advantages for the database architecture:
+
+- **🔄 Consistency**: Unified ID format across application and database layers
+- **🌐 Database Compatibility**: Better support for PostgreSQL, MySQL, and other databases
+- **🔧 Tooling**: Improved compatibility with database administration tools
+- **🐛 Debugging**: Easier correlation of logs and database records
+- **📈 Scalability**: Better performance characteristics for high-volume systems
+
+This design aligns the database layer with the existing application architecture and prepares the system for multi-database deployment scenarios.
