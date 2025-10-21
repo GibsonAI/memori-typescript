@@ -1,0 +1,27 @@
+{
+  "strategyName": "fts5",
+  "enabled": true,
+  "priority": 10,
+  "timeout": 10000,
+  "maxResults": 100,
+  "performance": {
+    "enableCaching": true,
+    "cacheSize": 1000,
+    "enableParallelExecution": false
+  },
+  "scoring": {
+    "baseWeight": 1,
+    "recencyWeight": 0.2,
+    "importanceWeight": 0.8,
+    "relationshipWeight": 0.3
+  },
+  "strategySpecific": {
+    "bm25Weights": {
+      "title": 2,
+      "content": 1,
+      "category": 1.5
+    },
+    "queryTimeout": 10000,
+    "resultBatchSize": 100
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "strategyName": "semantic",
+  "enabled": false,
+  "priority": 8,
+  "timeout": 15000,
+  "maxResults": 50,
+  "performance": {
+    "enableCaching": true,
+    "cacheSize": 200,
+    "enableParallelExecution": false
+  },
+  "scoring": {
+    "baseWeight": 0.7,
+    "recencyWeight": 0.3,
+    "importanceWeight": 0.5,
+    "relationshipWeight": 0.4
+  },
+  "strategySpecific": {
+    "similarityThreshold": 0.7,
+    "embeddingModel": "all-MiniLM-L6-v2",
+    "maxTokens": 512,
+    "enableReranking": true
+  }
+}

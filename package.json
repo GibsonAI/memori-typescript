@@ -1,0 +1,94 @@
+{
+  "name": "memorits",
+  "version": "0.1.0",
+  "description": "A type-safe memory engine for AI conversations with OpenAI integration. TypeScript port of the original Memori project by GibsonAI, created by mrorigo with AI assistance from Roo Code (code-supernova model).",
+  "license": "Apache-2.0",
+  "author": "mrorigo@gmail.com (mrorigo)",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "require": "./dist/src/index.js",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "prisma/",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "bin": {
+    "memorits": "./dist/src/cli/init-db.js"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "memory",
+    "ai",
+    "conversations",
+    "openai",
+    "typescript",
+    "prisma",
+    "sqlite",
+    "memory-management",
+    "conversational-ai"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mrorigo/memorits.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mrorigo/memorits/issues"
+  },
+  "homepage": "https://github.com/mrorigo/memorits#readme",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build && npm run test",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "example:basic": "tsx examples/basic-usage.ts",
+    "example:memoriai": "tsx examples/basic-usage.ts",
+    "example:search": "tsx examples/memory-search.ts",
+    "example:conscious": "tsx examples/conscious-memory-usage.ts",
+    "example:dual-memory": "tsx examples/dual-memory-mode.ts",
+    "example:search-strategy": "tsx examples/search-strategy-usage.ts",
+    "example:performance-dashboard": "tsx examples/performance-dashboard.ts",
+    "example:consolidation": "tsx examples/memory-consolidation.ts",
+    "index:health": "tsx examples/scripts/index-health.ts",
+    "index:optimize": "tsx examples/scripts/index-optimize.ts",
+    "index:backup": "tsx examples/scripts/index-backup.ts"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.5.2",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.44.1",
+    "@typescript-eslint/parser": "^8.44.1",
+    "eslint": "^9.36.0",
+    "jest": "^30.1.3",
+    "ts-jest": "^29.4.4",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "@prisma/client": "^6.16.2",
+    "prisma": "^6.16.2",
+    "openai": "^5.23.0",
+    "uuid": "^13.0.0",
+    "winston": "^3.14.2",
+    "zod": "^3.25.76"
+  }
+}

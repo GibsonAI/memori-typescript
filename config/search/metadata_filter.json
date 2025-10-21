@@ -1,0 +1,38 @@
+{
+  "strategyName": "metadata_filter",
+  "enabled": true,
+  "priority": 4,
+  "timeout": 5000,
+  "maxResults": 200,
+  "performance": {
+    "enableCaching": true,
+    "cacheSize": 300,
+    "enableParallelExecution": true
+  },
+  "scoring": {
+    "baseWeight": 0.6,
+    "recencyWeight": 0.2,
+    "importanceWeight": 0.7,
+    "relationshipWeight": 0.2
+  },
+  "strategySpecific": {
+    "fields": {
+      "enableNestedAccess": true,
+      "maxDepth": 5,
+      "enableTypeValidation": true,
+      "enableFieldDiscovery": true
+    },
+    "validation": {
+      "strictValidation": false,
+      "enableCustomValidators": true,
+      "failOnInvalidMetadata": false
+    },
+    "performance": {
+      "enableQueryOptimization": true,
+      "enableResultCaching": true,
+      "maxExecutionTime": 10000,
+      "batchSize": 100,
+      "cacheSize": 100
+    }
+  }
+}

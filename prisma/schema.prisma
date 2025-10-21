@@ -1,0 +1,89 @@
+datasource db {
+  provider = "sqlite"  // Start with SQLite for testing
+  url      = env("DATABASE_URL")
+  // Use system SQLite with FTS5 support instead of bundled version
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ChatHistory {
+  id          String   @id @default(cuid())
+  userInput   String
+  aiOutput    String
+  model       String
+  timestamp   DateTime @default(now())
+  sessionId   String
+  namespace   String   @default("default")
+  tokensUsed  Int      @default(0)
+  metadata    Json?
+
+  shortTermMemories ShortTermMemory[]
+  longTermMemories  LongTermMemory[]
+
+  @@map("chat_history")
+}
+
+model ShortTermMemory {
+  id               String   @id @default(cuid())
+  chatId           String?
+  processedData    Json
+  importanceScore  Float    @default(0.5)
+  categoryPrimary  String
+  retentionType    String   @default("short_term")
+  namespace        String   @default("default")
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime?
+  accessCount      Int      @default(0)
+  lastAccessed     DateTime?
+  searchableContent String
+  summary          String
+  isPermanentContext Boolean @default(false)
+
+  chat ChatHistory? @relation(fields: [chatId], references: [id], onDelete: SetNull)
+
+  @@map("short_term_memory")
+}
+
+model LongTermMemory {
+  id                    String   @id @default(cuid())
+  originalChatId        String?
+  processedData         Json
+  importanceScore       Float    @default(0.5)
+  categoryPrimary       String
+  retentionType         String   @default("long_term")
+  namespace             String   @default("default")
+  createdAt             DateTime @default(now())
+  accessCount           Int      @default(0)
+  lastAccessed          DateTime?
+  searchableContent     String
+  summary               String
+  noveltyScore          Float    @default(0.5)
+  relevanceScore        Float    @default(0.5)
+  actionabilityScore    Float    @default(0.5)
+
+  // Classification Fields
+  classification        String   @default("conversational")
+  memoryImportance      String   @default("medium")
+  topic                 String?
+  entitiesJson          Json?
+  keywordsJson          Json?
+
+  // Memory Management
+  duplicateOf           String?
+  supersedesJson        Json?
+  relatedMemoriesJson   Json?
+
+  // Technical Metadata
+  confidenceScore       Float    @default(0.8)
+  extractionTimestamp   DateTime @default(now())
+  classificationReason  String?
+
+  // Conscious Processing
+  consciousProcessed    Boolean  @default(false)
+
+  chat ChatHistory? @relation(fields: [originalChatId], references: [id], onDelete: SetNull)
+
+  @@map("long_term_memory")
+}

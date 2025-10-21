@@ -1,0 +1,25 @@
+{
+  "strategyName": "relationship",
+  "enabled": true,
+  "priority": 9,
+  "timeout": 8000,
+  "maxResults": 100,
+  "performance": {
+    "enableCaching": true,
+    "cacheSize": 400,
+    "enableParallelExecution": false
+  },
+  "scoring": {
+    "baseWeight": 0.8,
+    "recencyWeight": 0.2,
+    "importanceWeight": 0.6,
+    "relationshipWeight": 1
+  },
+  "strategySpecific": {
+    "maxDepth": 3,
+    "minRelationshipStrength": 0.3,
+    "minRelationshipConfidence": 0.5,
+    "includeRelationshipPaths": true,
+    "traversalStrategy": "strength_weighted"
+  }
+}

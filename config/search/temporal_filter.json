@@ -1,0 +1,31 @@
+{
+  "strategyName": "temporal_filter",
+  "enabled": true,
+  "priority": 6,
+  "timeout": 5000,
+  "maxResults": 200,
+  "performance": {
+    "enableCaching": true,
+    "cacheSize": 300,
+    "enableParallelExecution": true
+  },
+  "scoring": {
+    "baseWeight": 0.6,
+    "recencyWeight": 0.9,
+    "importanceWeight": 0.3,
+    "relationshipWeight": 0.1
+  },
+  "strategySpecific": {
+    "naturalLanguage": {
+      "enableParsing": true,
+      "enablePatternMatching": true,
+      "confidenceThreshold": 0.3
+    },
+    "performance": {
+      "enableQueryOptimization": true,
+      "enableResultCaching": true,
+      "maxExecutionTime": 10000,
+      "batchSize": 100
+    }
+  }
+}

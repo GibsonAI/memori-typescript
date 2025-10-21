@@ -1,0 +1,27 @@
+{
+  "strategyName": "recent",
+  "enabled": true,
+  "priority": 3,
+  "timeout": 3000,
+  "maxResults": 50,
+  "performance": {
+    "enableCaching": true,
+    "cacheSize": 200,
+    "enableParallelExecution": false
+  },
+  "scoring": {
+    "baseWeight": 0.9,
+    "recencyWeight": 1,
+    "importanceWeight": 0.4,
+    "relationshipWeight": 0.1
+  },
+  "strategySpecific": {
+    "timeWindows": {
+      "recent": 86400000,
+      "today": 86400000,
+      "week": 604800000,
+      "month": 2592000000
+    },
+    "maxAge": 7776000000
+  }
+}

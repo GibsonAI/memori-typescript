@@ -1,0 +1,30 @@
+{
+  "strategyName": "category_filter",
+  "enabled": true,
+  "priority": 7,
+  "timeout": 5000,
+  "maxResults": 200,
+  "performance": {
+    "enableCaching": true,
+    "cacheSize": 300,
+    "enableParallelExecution": true
+  },
+  "scoring": {
+    "baseWeight": 0.6,
+    "recencyWeight": 0.2,
+    "importanceWeight": 0.3,
+    "relationshipWeight": 0.1
+  },
+  "strategySpecific": {
+    "hierarchy": {
+      "maxDepth": 5,
+      "enableCaching": true
+    },
+    "performance": {
+      "enableQueryOptimization": true,
+      "enableResultCaching": true,
+      "maxExecutionTime": 10000,
+      "batchSize": 100
+    }
+  }
+}
