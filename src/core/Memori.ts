@@ -1,5 +1,5 @@
 // Memori Core Library
-import { v4 as uuidv4 } from 'uuid';
+import { IdGenerator } from './infrastructure/database/utils/id-generator';
 import { DatabaseManager } from './infrastructure/database/DatabaseManager';
 import { MemoryAgent } from './domain/memory/MemoryAgent';
 import { ConsciousAgent } from './domain/memory/ConsciousAgent';
@@ -61,7 +61,7 @@ export class Memori {
       Object.assign(this.config, config);
     }
 
-    this.sessionId = uuidv4();
+    this.sessionId = IdGenerator.generateSessionId();
     this.dbManager = new DatabaseManager(this.config.databaseUrl);
   }
 
@@ -236,7 +236,7 @@ export class Memori {
       throw new Error('Memori is not enabled');
     }
 
-    const chatId = uuidv4();
+    const chatId = IdGenerator.generateChatId();
 
     await this.dbManager.storeChatHistory({
       chatId,

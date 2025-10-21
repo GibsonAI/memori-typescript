@@ -5,7 +5,7 @@ import type {
 } from './types';
 import type { MemoryManager } from './types';
 import { logInfo, logError } from '../../core/infrastructure/config/Logger';
-import { v4 as uuidv4 } from 'uuid';
+import { IdGenerator } from '../../core/infrastructure/database/utils/id-generator';
 import { MemoryImportanceLevel } from '../../core/types/schemas';
 
 /**
@@ -38,7 +38,7 @@ export class EmbeddingProxy {
     params: EmbeddingCreateParams,
     options?: OpenAI.RequestOptions,
   ): Promise<CreateEmbeddingResponse> {
-    const requestId = uuidv4();
+    const requestId = IdGenerator.generateRequestId();
     const startTime = Date.now();
 
     try {
@@ -73,7 +73,7 @@ export class EmbeddingProxy {
                 temperature: undefined,
                 maxTokens: undefined,
                 tokensUsed: response.usage?.total_tokens || 0,
-                conversationId: uuidv4(),
+                conversationId: IdGenerator.generateConversationId(),
               },
               importance: MemoryImportanceLevel.LOW, // Embeddings typically have lower importance
             },

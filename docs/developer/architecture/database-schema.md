@@ -96,23 +96,58 @@ These helpers are exposed through `Memori` (`getIndexHealthReport`, `optimizeInd
 
 ## ID Generation Implementation
 
-The `IdGenerator` utility class (`src/core/infrastructure/database/utils/id-generator.ts`) handles all UUID generation:
+The `IdGenerator` utility class (`src/core/infrastructure/database/utils/id-generator.ts`) handles all UUID generation across the entire application:
 
 ```typescript
 import { IdGenerator } from '../utils/id-generator';
 
-// Generate different types of IDs
-const memoryId = IdGenerator.generateMemoryId();
-const chatId = IdGenerator.generateChatId();
-const sessionId = IdGenerator.generateSessionId();
+// Standard UUID generation
+const id = IdGenerator.generateId();
 
-// Validate UUID format
-if (IdGenerator.isValidUUID(someId)) {
-  // Handle valid UUID
-}
+// Specialized ID types for different purposes
+const memoryId = IdGenerator.generateMemoryId();           // For memory records
+const chatId = IdGenerator.generateChatId();               // For chat/conversation records
+const sessionId = IdGenerator.generateSessionId();         // For MemoriAI sessions
+const requestId = IdGenerator.generateRequestId();         // For API requests
+const conversationId = IdGenerator.generateConversationId(); // For conversation tracking
+const recordId = IdGenerator.generateRecordId('chat');     // For prefixed records
+
+// Batch operations
+const batchIds = IdGenerator.generateBatchIds(10);
+
+// Debug and validation utilities
+const isValid = IdGenerator.isValidUUID(someId);
+const timestamp = IdGenerator.extractTimestampFromId(debugId);
+
+// Timestamped IDs for debugging (includes timestamp prefix)
+const debugId = IdGenerator.generateTimestampedId('CHAT');
 ```
 
-IDs are explicitly set during record creation in the database managers rather than relying on database auto-generation, ensuring consistency across different database systems.
+### Available ID Generation Methods
+
+| Method | Purpose | Example Usage |
+|--------|---------|---------------|
+| `generateId()` | Standard UUID v4 | General purpose IDs |
+| `generateMemoryId()` | Memory record IDs | `MemoryManager.createMemory()` |
+| `generateChatId()` | Chat record IDs | `ChatHistoryManager.saveChat()` |
+| `generateSessionId()` | Session tracking | `MemoriAI` instance sessions |
+| `generateRequestId()` | API request tracking | `Provider.request()` calls |
+| `generateConversationId()` | Conversation tracking | OpenAI integration layer |
+| `generateRecordId(type)` | Prefixed record IDs | Database record creation |
+| `generateBatchIds(count)` | Batch operations | High-volume record creation |
+| `generateTimestampedId(prefix)` | Debug-friendly IDs | Development and troubleshooting |
+
+### ID Format Examples
+
+```typescript
+// Standard UUID v4 format
+"9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+
+// Timestamped format (for debugging)
+"CHAT_20231021_190924_9b1deb4d3b7d"
+```
+
+IDs are explicitly set during record creation in the database managers rather than relying on database auto-generation, ensuring consistency across different database systems and providing better traceability.
 
 ## Working with Prisma
 

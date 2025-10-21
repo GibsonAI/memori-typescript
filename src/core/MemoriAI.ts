@@ -11,7 +11,7 @@
  * - Minimal complexity, maximum flexibility
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { IdGenerator } from './infrastructure/database/utils/id-generator';
 import { ProviderType } from './infrastructure/providers/ProviderType';
 import { IProviderConfig } from './infrastructure/providers/IProviderConfig';
 import { ILLMProvider, MemoryCapableProvider, ProviderInitializationOptions } from './infrastructure/providers/';
@@ -42,7 +42,7 @@ export class MemoriAI {
   private providerType: ProviderType;
 
   constructor(config: MemoriAIConfig) {
-    this.sessionId = uuidv4();
+    this.sessionId = IdGenerator.generateSessionId();
     this.mode = config.mode || 'automatic';
     this.config = config;
 
@@ -256,7 +256,7 @@ export class MemoriAI {
       throw new Error('recordConversation() only available in manual/conscious modes. Use chat() for automatic mode.');
     }
 
-    const chatId = uuidv4();
+    const chatId = IdGenerator.generateChatId();
 
     try {
       await this.memori.recordConversation(userInput, aiOutput, options);
