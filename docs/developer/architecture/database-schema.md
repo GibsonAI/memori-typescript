@@ -144,7 +144,10 @@ const debugId = IdGenerator.generateTimestampedId('CHAT');
 "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
 
 // Timestamped format (for debugging)
-"CHAT_20231021_190924_9b1deb4d3b7d"
+"CHAT_1697905764123_9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+
+// Without prefix
+"1697905764123_9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
 ```
 
 IDs are explicitly set during record creation in the database managers rather than relying on database auto-generation, ensuring consistency across different database systems and providing better traceability.
