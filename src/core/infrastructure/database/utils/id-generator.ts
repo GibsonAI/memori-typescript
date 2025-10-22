@@ -62,7 +62,7 @@ export class IdGenerator {
    * @param type - The type of record ('chat' | 'embedding')
    */
   static generateRecordId(type: 'chat' | 'embedding'): string {
-    const prefix = type === 'chat' ? 'record' : 'embedding_record';
+    const prefix = type === 'chat' ? 'chat_record' : 'embedding_record';
     return this.generatePrefixedId(prefix);
   }
 

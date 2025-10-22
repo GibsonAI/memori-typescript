@@ -110,7 +110,7 @@ const chatId = IdGenerator.generateChatId();               // For chat/conversat
 const sessionId = IdGenerator.generateSessionId();         // For MemoriAI sessions
 const requestId = IdGenerator.generateRequestId();         // For API requests
 const conversationId = IdGenerator.generateConversationId(); // For conversation tracking
-const recordId = IdGenerator.generateRecordId('chat');     // For prefixed records
+const recordId = IdGenerator.generateRecordId('chat');     // For prefixed records (chat_record_timestamp_uuid)
 
 // Batch operations
 const batchIds = IdGenerator.generateBatchIds(10);
@@ -133,7 +133,7 @@ const debugId = IdGenerator.generateTimestampedId('CHAT');
 | `generateSessionId()` | Session tracking | `MemoriAI` instance sessions |
 | `generateRequestId()` | API request tracking | `Provider.request()` calls |
 | `generateConversationId()` | Conversation tracking | OpenAI integration layer |
-| `generateRecordId(type)` | Prefixed record IDs | Database record creation |
+| `generateRecordId(type)` | Prefixed record IDs | Database record creation (chat_record/embedding_record) |
 | `generateBatchIds(count)` | Batch operations | High-volume record creation |
 | `generateTimestampedId(prefix)` | Debug-friendly IDs | Development and troubleshooting |
 
