@@ -95,14 +95,47 @@ export class IdGenerator {
   /**
    * Extract timestamp from a prefixed ID if present
    * Useful for debugging and sorting by creation time
+   *
+   * Supports multiple ID formats:
+   * - prefix_timestamp_uuid (e.g., "chat_record_1697905764123_uuid")
+   * - timestamp_uuid (e.g., "1697905764123_uuid")
+   * - UUID only (returns null)
    */
   static extractTimestampFromId(id: string): number | null {
-    const parts = id.split('_');
-    if (parts.length >= 2) {
-      const timestampStr = parts[parts.length - 2]; // Second to last part should be timestamp
-      const timestamp = parseInt(timestampStr, 10);
-      return isNaN(timestamp) ? null : timestamp;
+    if (!id || typeof id !== 'string') {
+      return null;
     }
-    return null;
+
+    const parts = id.split('_');
+
+    // Need at least 2 parts to have a timestamp (timestamp_uuid or prefix_timestamp_uuid)
+    if (parts.length < 2) {
+      return null;
+    }
+
+    // For prefixed IDs like "prefix_timestamp_uuid", timestamp is second to last
+    // For simple IDs like "timestamp_uuid", timestamp is first part
+    let timestampStr: string;
+
+    // Check if this looks like a prefixed ID (prefix_timestamp_uuid format)
+    if (parts.length === 3 && this.isValidUUID(parts[2])) {
+      // Format: "prefix_timestamp_uuid" - timestamp is middle part
+      timestampStr = parts[1];
+    } else if (parts.length === 2 && this.isValidUUID(parts[1])) {
+      // Format: "timestamp_uuid" - timestamp is first part
+      timestampStr = parts[0];
+    } else {
+      // Doesn't match expected formats
+      return null;
+    }
+
+    const timestamp = parseInt(timestampStr, 10);
+
+    // Validate timestamp is a reasonable number (between 2000 and 2100)
+    if (isNaN(timestamp) || timestamp < 946684800000 || timestamp > 4102444800000) {
+      return null;
+    }
+
+    return timestamp;
   }
 }

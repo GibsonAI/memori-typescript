@@ -117,7 +117,7 @@ const batchIds = IdGenerator.generateBatchIds(10);
 
 // Debug and validation utilities
 const isValid = IdGenerator.isValidUUID(someId);
-const timestamp = IdGenerator.extractTimestampFromId(debugId);
+const timestamp = IdGenerator.extractTimestampFromId(debugId); // Supports multiple formats
 
 // Timestamped IDs for debugging (includes timestamp prefix)
 const debugId = IdGenerator.generateTimestampedId('CHAT');
@@ -140,14 +140,20 @@ const debugId = IdGenerator.generateTimestampedId('CHAT');
 ### ID Format Examples
 
 ```typescript
-// Standard UUID v4 format
+// Standard UUID v4 format (no timestamp extractable)
 "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
 
-// Timestamped format (for debugging)
-"CHAT_1697905764123_9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+// Prefixed format (timestamp extractable)
+"chat_record_1697905764123_9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
 
-// Without prefix
+// Timestamped format (timestamp extractable)
 "1697905764123_9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+```
+
+**Timestamp Extraction Support:**
+- ✅ Prefixed IDs: `prefix_timestamp_uuid` → extracts `timestamp`
+- ✅ Simple timestamped: `timestamp_uuid` → extracts `timestamp`
+- ❌ Plain UUIDs: `uuid` → returns `null` (no timestamp available)
 ```
 
 IDs are explicitly set during record creation in the database managers rather than relying on database auto-generation, ensuring consistency across different database systems and providing better traceability.
