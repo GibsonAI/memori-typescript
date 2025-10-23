@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { IdGenerator } from '../database/utils/id-generator';
 import { BaseLLMProvider } from './BaseLLMProvider';
 import {
   IProviderConfig,
@@ -280,7 +280,7 @@ export abstract class MemoryCapableProvider
     try {
       const lastUserMessage = this.extractLastUserMessageFromChatParams(params);
       const aiOutput = this.extractAssistantOutput(response);
-      const chatId = `record_${Date.now()}_${uuidv4()}`;
+      const chatId = IdGenerator.generateRecordId('chat');
 
       const processedMemory = await this.memoryAgent!.processConversation({
         chatId,
@@ -337,7 +337,7 @@ export abstract class MemoryCapableProvider
 
     try {
       const inputSummary = this.summarizeEmbeddingInput(params.input);
-      const chatId = `embedding_record_${Date.now()}_${uuidv4()}`;
+      const chatId = IdGenerator.generateRecordId('embedding');
 
       const processedMemory = await this.memoryAgent!.processConversation({
         chatId,
@@ -631,7 +631,7 @@ export abstract class MemoryCapableProvider
   }
 
   private generateChatId(prefix: 'chat' | 'embedding'): string {
-    return `${prefix}_${Date.now()}_${uuidv4()}`;
+    return IdGenerator.generateRecordId(prefix);
   }
 
   private async persistProcessedMemory(

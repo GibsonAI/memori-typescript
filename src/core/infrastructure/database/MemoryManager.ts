@@ -12,6 +12,7 @@ import { DatabaseContext } from './DatabaseContext';
 import { MemoryProcessingState, StateManager } from './StateManager';
 import { SanitizationError, ValidationError } from '../config/SanitizationUtils';
 import { BaseDatabaseService } from './BaseDatabaseService';
+import { IdGenerator } from './utils/id-generator';
 
 /**
  * Memory manager configuration interface
@@ -108,9 +109,13 @@ export class MemoryManager extends BaseDatabaseService {
       // This content comes from trusted LLM providers and has been processed by MemoryAgent
       // The strict security checks are more appropriate for user inputs, not AI-generated content
 
+      // Generate UUID for the memory
+      const memoryId = IdGenerator.generateMemoryId();
+
       // Store the memory using Prisma
       const result = await this.prisma.longTermMemory.create({
         data: {
+          id: memoryId,
           originalChatId: sanitizedData.chatId,
           processedData: sanitizedData.memoryData,
           importanceScore: this.calculateImportanceScore(sanitizedData.memoryData.importance),

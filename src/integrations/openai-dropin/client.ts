@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { v4 as uuidv4 } from 'uuid';
+import { IdGenerator } from '../../core/infrastructure/database/utils/id-generator';
 import { MemoryCapableProvider, LLMProviderFactory, IProviderConfig } from '../../core/infrastructure/providers/';
 import type {
   MemoriOpenAI,
@@ -24,7 +24,7 @@ export class MemoriOpenAIClient implements MemoriOpenAI {
         enableEmbeddingMemory: false,
         memoryProcessingMode: 'auto',
         minImportanceLevel: 'all',
-        sessionId: uuidv4(),
+        sessionId: IdGenerator.generateSessionId(),
         ...config.memory,
       },
     };

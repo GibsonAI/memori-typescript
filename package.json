@@ -1,6 +1,6 @@
 {
   "name": "memorits",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A type-safe memory engine for AI conversations with OpenAI integration. TypeScript port of the original Memori project by GibsonAI, created by mrorigo with AI assistance from Roo Code (code-supernova model).",
   "license": "Apache-2.0",
   "author": "mrorigo@gmail.com (mrorigo)",

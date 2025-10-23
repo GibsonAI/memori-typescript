@@ -6,7 +6,7 @@ import type {
 } from './types';
 import type { MemoryManager } from './types';
 import { logInfo, logError } from '../../core/infrastructure/config/Logger';
-import { v4 as uuidv4 } from 'uuid';
+import { IdGenerator } from '../../core/infrastructure/database/utils/id-generator';
 
 /**
  * ChatProxy class that wraps OpenAI chat completions with memory recording
@@ -35,7 +35,7 @@ export class ChatProxy implements ChatProxyInterface {
     params: ChatCompletionCreateParams,
     options?: OpenAI.RequestOptions,
   ): Promise<OpenAI.ChatCompletion | AsyncIterable<OpenAI.ChatCompletionChunk>> {
-    const requestId = uuidv4();
+    const requestId = IdGenerator.generateRequestId();
     const startTime = Date.now();
 
     try {
