@@ -16,14 +16,13 @@
   },
   "files": [
     "dist-bundle/",
-    "dist/src/",
     "prisma/",
     "README.md",
     "LICENSE",
     "package.json"
   ],
   "bin": {
-    "memorits": "./dist/src/cli/init-db.js"
+    "memorits": "./dist-bundle/init-db.js"
   },
   "engines": {
     "node": ">=18.0.0",
