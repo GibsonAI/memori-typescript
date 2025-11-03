@@ -14,6 +14,7 @@ import { PrismaClient } from '@prisma/client';
 import { logInfo, logError } from '../../infrastructure/config/Logger';
 import { DatabaseContext } from './DatabaseContext';
 import { DatabaseOperationMetrics } from './types';
+import { createHash } from 'crypto';
 
 // ===== TRANSACTION INTERFACES =====
 
@@ -458,14 +459,9 @@ export class TransactionCoordinator {
     const combined = `${transactionId}-${timestamp}`;
 
     // Simple hash function (in production, use crypto.createHash)
-    let hash = 0;
-    for (let i = 0; i < combined.length; i++) {
-      const char = combined.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-
-    return Math.abs(hash).toString(16);
+    const hash = createHash('sha256');
+    hash.update(combined);
+    return hash.digest('hex');
   }
 
   /**

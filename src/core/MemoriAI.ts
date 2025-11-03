@@ -15,6 +15,7 @@ import { IdGenerator } from './infrastructure/database/utils/id-generator';
 import { ProviderType } from './infrastructure/providers/ProviderType';
 import { IProviderConfig } from './infrastructure/providers/IProviderConfig';
 import { ILLMProvider, MemoryCapableProvider, ProviderInitializationOptions } from './infrastructure/providers/';
+import { OpenAIProvider, AnthropicProvider, OllamaProvider } from './infrastructure/providers/';
 import { Memori } from './Memori';
 import { logInfo, logError } from './infrastructure/config/Logger';
 import { MemoryImportanceLevel, MemoryClassification } from './types/schemas';
@@ -519,11 +520,7 @@ export class MemoriAI {
    * Get the provider class for the given provider type
    */
   private getProviderClass(providerType: ProviderType): new (config: IProviderConfig) => MemoryCapableProvider {
-    // Import provider classes dynamically to avoid circular imports
-    const { OpenAIProvider } = require('./infrastructure/providers/OpenAIProvider');
-    const { AnthropicProvider } = require('./infrastructure/providers/AnthropicProvider');
-    const { OllamaProvider } = require('./infrastructure/providers/OllamaProvider');
-
+    // Note: Importing the same providers at the top of the file
     switch (providerType) {
       case ProviderType.OPENAI: return OpenAIProvider;
       case ProviderType.ANTHROPIC: return AnthropicProvider;
@@ -605,3 +602,4 @@ export class MemoriAI {
     return this.providerType;
   }
 }
+

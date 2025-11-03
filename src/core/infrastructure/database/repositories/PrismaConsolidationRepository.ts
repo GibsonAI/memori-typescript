@@ -1,5 +1,4 @@
-// src/core/database/repositories/PrismaConsolidationRepository.ts
-
+import { createHash } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { MemorySearchResult, MemoryClassification, MemoryImportanceLevel } from '../../../types/models';
 import { logInfo, logError } from '../../../infrastructure/config/Logger';
@@ -1019,8 +1018,7 @@ export class PrismaConsolidationRepository {
    * Generate data integrity hash for validation
    */
   generateDataIntegrityHash(data: any): string {
-    const crypto = require('crypto');
-    const hash = crypto.createHash('sha256');
+    const hash = createHash('sha256');
     hash.update(JSON.stringify(data));
     return hash.digest('hex');
   }

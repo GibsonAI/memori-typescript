@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./tmp/rollup-ts",
+    "rootDir": "./src",
+    "declaration": false,
+    "noEmit": false
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "tests/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "dist/**/*"
+  ]
+}
