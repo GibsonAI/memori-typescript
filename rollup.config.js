@@ -67,7 +67,7 @@ export default {
   ],
   external: [
     'crypto', 'util', 'stream', 'events', 'os', 'path', 'url', 'querystring', 'buffer', 'process',
-    '@prisma/client', 'openai', '@anthropic-ai/sdk', 'uuid', 'winston', 'zod'
+    '@prisma/client', 'openai', '@anthropic-ai/sdk', 'uuid', 'winston', 'zod', 'module'
   ],
   treeshake: {
     moduleSideEffects: false,
