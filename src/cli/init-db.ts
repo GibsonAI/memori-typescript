@@ -2,6 +2,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 interface InitDbOptions {
   schemaPath: string;
@@ -11,17 +12,30 @@ interface InitDbOptions {
 
 const DEFAULT_COMMAND = 'init-db';
 
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 function resolveDefaultSchema(): string {
-  const candidate = path.resolve(__dirname, '../../prisma/schema.prisma');
-  if (fs.existsSync(candidate)) {
-    return candidate;
+  // Try multiple locations for the schema file
+  const candidates = [
+    path.resolve(__dirname, '../../../prisma/schema.prisma'), // npm package
+    path.resolve(__dirname, '../../prisma/schema.prisma'),    // local dev
+    path.resolve(process.cwd(), 'node_modules/memorits/prisma/schema.prisma'), // installed package
+    path.resolve(process.cwd(), 'prisma/schema.prisma'),      // current directory
+  ];
+  
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
   }
-  throw new Error(`Unable to locate Prisma schema at expected path: ${candidate}`);
+  
+  throw new Error(`Unable to locate Prisma schema. Tried:\n${candidates.join('\n')}`);
 }
 
 function parseArgs(argv: string[]): { command?: string; options: InitDbOptions } {
   const args = [...argv];
-  const command = args.shift();
   const options: InitDbOptions = {
     schemaPath: resolveDefaultSchema(),
   };
@@ -63,7 +77,7 @@ function parseArgs(argv: string[]): { command?: string; options: InitDbOptions }
     throw new Error(`Unrecognized option: ${raw}`);
   }
 
-  return { command, options };
+  return { options };
 }
 
 function printGeneralHelp(): void {
@@ -82,8 +96,11 @@ function printGeneralHelp(): void {
   console.log(lines.join('\n'));
 }
 
-function requirePrismaCli(): string {
+async function requirePrismaCli(): Promise<string> {
   try {
+    // Dynamic import for ES module compatibility
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
     return require.resolve('prisma/build/index.js');
   } catch (error) {
     throw new Error(
@@ -93,22 +110,26 @@ function requirePrismaCli(): string {
 }
 
 async function run(): Promise<void> {
-  const [, , maybeCommand, ...rest] = process.argv;
-
-  if (!maybeCommand || maybeCommand === '--help' || maybeCommand === '-h') {
+  // Skip the first two args (node and script path)
+  const args = process.argv.slice(2);
+  
+  // If no arguments or help flag, show help
+  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     printGeneralHelp();
     process.exit(0);
   }
 
-  if (maybeCommand !== DEFAULT_COMMAND) {
-    console.error(`Unknown command "${maybeCommand}".`);
-    printGeneralHelp();
-    process.exit(1);
+  // Check if first argument is a command
+  let commandArgs = args;
+  if (args[0] === DEFAULT_COMMAND || args[0] === 'init-db') {
+    // Skip the command name, the rest are options
+    commandArgs = args.slice(1);
   }
+  // If no command but we have options, treat as direct options
 
   let parsed;
   try {
-    parsed = parseArgs(rest);
+    parsed = parseArgs(commandArgs);
   } catch (error) {
     console.error((error as Error).message);
     process.exit(1);
@@ -128,24 +149,26 @@ async function run(): Promise<void> {
     return;
   }
 
-  const prismaCli = requirePrismaCli();
+  const prismaCli = await requirePrismaCli();
 
-  const args = [prismaCli, 'db', 'push', '--schema', schemaPath];
+  const prismaArgs = [prismaCli, 'db', 'push', '--schema', schemaPath];
   const databaseUrl = parsed.options.url ?? process.env.DATABASE_URL ?? process.env.MEMORI_DATABASE_URL;
+  
+  const childEnv = {
+    ...process.env,
+  };
+  
   if (databaseUrl) {
-    args.push('--url', databaseUrl);
+    childEnv.DATABASE_URL = databaseUrl;
   } else {
     console.warn(
       'No database URL provided. Pass --url file:./memori.db or set DATABASE_URL / MEMORI_DATABASE_URL.',
     );
   }
 
-  const child = spawn(process.execPath, args, {
+  const child = spawn(process.execPath, prismaArgs, {
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl ?? process.env.DATABASE_URL,
-    },
+    env: childEnv,
   });
 
   child.on('exit', code => {

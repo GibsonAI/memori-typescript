@@ -163,10 +163,6 @@ export class Memori {
    * Get the provider class for the given provider type
    */
   private getProviderClass(providerType: ProviderType): new (config: IProviderConfig) => MemoryCapableProvider {
-    const { OpenAIProvider } = require('./infrastructure/providers/OpenAIProvider');
-    const { AnthropicProvider } = require('./infrastructure/providers/AnthropicProvider');
-    const { OllamaProvider } = require('./infrastructure/providers/OllamaProvider');
-
     switch (providerType) {
       case ProviderType.OPENAI: return OpenAIProvider;
       case ProviderType.ANTHROPIC: return AnthropicProvider;
