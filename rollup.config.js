@@ -28,7 +28,7 @@ export default {
         entries: [
           {
             find: /^@\/(.*)$/,
-            replacement: path.resolve(process.cwd(), 'src', '$1'),
+            replacement: path.resolve(process.cwd(), 'dist/src', '$1'),
           },
         ],
       },
