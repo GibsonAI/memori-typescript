@@ -1134,4 +1134,44 @@ export class DatabaseManager {
       this.startConsolidationScheduling();
     }
   }
+
+  // ===== ACCESSOR METHODS FOR PRIVATE PROPERTIES =====
+  
+  /**
+   * Get SearchManager instance for direct access
+   */
+  public getSearchManager(): SearchManager {
+    return this.searchManager;
+  }
+
+  /**
+   * Get ChatHistoryManager instance for direct access
+   */
+  public getChatHistoryManager(): ChatHistoryManager {
+    return this.chatHistoryManager;
+  }
+
+  /**
+   * Get DuplicateManager instance for direct access
+   */
+  public getDuplicateManager(): DuplicateManager {
+    return this.duplicateManager;
+  }
+
+  /**
+   * Get StatisticsManager instance for direct access
+   */
+  public getStatisticsManager(): StatisticsManager {
+    return this.statisticsManager;
+  }
+
+  /**
+   * Get RelationshipService instance as relationshipProcessor
+   */
+  public getRelationshipProcessor(): RelationshipService {
+    if (!this.relationshipService) {
+      throw new Error('RelationshipService not available - relationship processing not initialized');
+    }
+    return this.relationshipService;
+  }
 }

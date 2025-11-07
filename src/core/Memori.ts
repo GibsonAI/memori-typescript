@@ -3,7 +3,7 @@ import { IdGenerator } from './infrastructure/database/utils/id-generator';
 import { DatabaseManager } from './infrastructure/database/DatabaseManager';
 import { MemoryAgent } from './domain/memory/MemoryAgent';
 import { ConsciousAgent } from './domain/memory/ConsciousAgent';
-import { OpenAIProvider, OllamaProvider, AnthropicProvider, LLMProviderFactory, ProviderType, MemoryCapableProvider, ILLMProvider, IProviderConfig, ProviderInitializationOptions } from './infrastructure/providers/';
+import { OpenAIProvider, OllamaProvider, AnthropicProvider, ProviderType, MemoryCapableProvider, ILLMProvider, IProviderConfig, ProviderInitializationOptions } from './infrastructure/providers/';
 import { ConfigManager, MemoriConfig } from './infrastructure/config/ConfigManager';
 import { MemoriAIConfig } from './MemoriAIConfig';
 import { logInfo, logError } from './infrastructure/config/Logger';
@@ -42,18 +42,18 @@ export class Memori {
       // Handle mode configuration by mapping to legacy options
       if (config.mode) {
         switch (config.mode) {
-          case 'automatic':
-            this.config.autoIngest = true;
-            this.config.consciousIngest = false;
-            break;
-          case 'manual':
-            this.config.autoIngest = false;
-            this.config.consciousIngest = false;
-            break;
-          case 'conscious':
-            this.config.autoIngest = false;
-            this.config.consciousIngest = true;
-            break;
+        case 'automatic':
+          this.config.autoIngest = true;
+          this.config.consciousIngest = false;
+          break;
+        case 'manual':
+          this.config.autoIngest = false;
+          this.config.consciousIngest = false;
+          break;
+        case 'conscious':
+          this.config.autoIngest = false;
+          this.config.consciousIngest = true;
+          break;
         }
       }
 
@@ -164,10 +164,10 @@ export class Memori {
    */
   private getProviderClass(providerType: ProviderType): new (config: IProviderConfig) => MemoryCapableProvider {
     switch (providerType) {
-      case ProviderType.OPENAI: return OpenAIProvider;
-      case ProviderType.ANTHROPIC: return AnthropicProvider;
-      case ProviderType.OLLAMA: return OllamaProvider;
-      default: return OpenAIProvider;
+    case ProviderType.OPENAI: return OpenAIProvider;
+    case ProviderType.ANTHROPIC: return AnthropicProvider;
+    case ProviderType.OLLAMA: return OllamaProvider;
+    default: return OpenAIProvider;
     }
   }
 
@@ -369,7 +369,7 @@ export class Memori {
   }
 
   async searchMemories(query: string, options: SearchOptions = {}): Promise<MemorySearchResult[]> {
-    const searchManager = (this.dbManager as any).searchManager;
+    const searchManager = this.dbManager.getSearchManager();
     return searchManager.searchMemories(query, {
       namespace: this.config.namespace,
       limit: options.limit || 5,
@@ -652,59 +652,59 @@ export class Memori {
   /**
     * Store processed memory directly (used by memory manager components)
     */
-   async storeProcessedMemory(
-     processedMemory: ProcessedLongTermMemory,
-     chatId: string,
-     namespace?: string,
-   ): Promise<string> {
-     if (!this.enabled) {
-       throw new Error('Memori is not enabled');
-     }
+  async storeProcessedMemory(
+    processedMemory: ProcessedLongTermMemory,
+    chatId: string,
+    namespace?: string,
+  ): Promise<string> {
+    if (!this.enabled) {
+      throw new Error('Memori is not enabled');
+    }
 
-     const targetNamespace = namespace || this.config.namespace;
+    const targetNamespace = namespace || this.config.namespace;
 
-     try {
-       // For LLM-generated memories, we need to ensure there's a ChatHistory record
-       // or modify the storage to handle cases without chat history
-       let actualChatId = chatId;
+    try {
+      // For LLM-generated memories, we need to ensure there's a ChatHistory record
+      // or modify the storage to handle cases without chat history
+      let actualChatId = chatId;
 
-       // Check if this chatId already exists in ChatHistory
-       try {
-         const chatHistoryManager = (this.dbManager as any).chatHistoryManager;
-         if (chatHistoryManager) {
-           const existingChat = await chatHistoryManager.getChatHistory(chatId);
-           if (!existingChat) {
-             // Create a minimal ChatHistory record for LLM-generated memories
-             // This is needed because LongTermMemory has a foreign key to ChatHistory
-             await chatHistoryManager.storeChatHistory({
-               chatId,
-               userInput: processedMemory.content.substring(0, 500) + (processedMemory.content.length > 500 ? '...' : ''), // Truncate for chat history
-               aiOutput: 'LLM-generated memory (no original conversation)',
-               model: this.config.model || 'unknown',
-               sessionId: this.sessionId,
-               namespace: targetNamespace || this.config.namespace || 'default',
-               metadata: {
-                 memoryGenerated: true,
-                 memoryId: 'pending',
-                 source: 'llm-direct',
-               },
-             });
-           }
-         }
-       } catch (error) {
-         logError('Failed to ensure ChatHistory exists for memory storage', {
-           component: 'Memori',
-           chatId,
-           error: error instanceof Error ? error.message : String(error),
-         });
-         // Continue with memory storage even if ChatHistory creation fails
-       }
+      // Check if this chatId already exists in ChatHistory
+      try {
+        const chatHistoryManager = this.dbManager.getChatHistoryManager();
+        if (chatHistoryManager) {
+          const existingChat = await chatHistoryManager.getChatHistory(chatId);
+          if (!existingChat) {
+            // Create a minimal ChatHistory record for LLM-generated memories
+            // This is needed because LongTermMemory has a foreign key to ChatHistory
+            await chatHistoryManager.storeChatHistory({
+              chatId,
+              userInput: processedMemory.content.substring(0, 500) + (processedMemory.content.length > 500 ? '...' : ''), // Truncate for chat history
+              aiOutput: 'LLM-generated memory (no original conversation)',
+              model: this.config.model || 'unknown',
+              sessionId: this.sessionId,
+              namespace: targetNamespace || this.config.namespace || 'default',
+              metadata: {
+                memoryGenerated: true,
+                memoryId: 'pending',
+                source: 'llm-direct',
+              },
+            });
+          }
+        }
+      } catch (error) {
+        logError('Failed to ensure ChatHistory exists for memory storage', {
+          component: 'Memori',
+          chatId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with memory storage even if ChatHistory creation fails
+      }
 
-       const memoryId = await this.dbManager.storeLongTermMemory(
-         processedMemory,
-         actualChatId,
-         targetNamespace,
-       );
+      const memoryId = await this.dbManager.storeLongTermMemory(
+        processedMemory,
+        actualChatId,
+        targetNamespace,
+      );
 
       logInfo(`Processed memory stored successfully for chat ${chatId}`, {
         component: 'Memori',
@@ -749,7 +749,7 @@ export class Memori {
     const limit = options?.limit || 20;
 
     try {
-      const duplicateManager = (this.dbManager as any).duplicateManager;
+      const duplicateManager = this.dbManager.getDuplicateManager();
       if (!duplicateManager) {
         throw new Error('DuplicateManager not available');
       }
@@ -891,7 +891,7 @@ export class Memori {
     const targetNamespace = namespace || this.config.namespace;
 
     try {
-      const statisticsManager = (this.dbManager as any).statisticsManager;
+      const statisticsManager = this.dbManager.getStatisticsManager();
       if (!statisticsManager) {
         throw new Error('StatisticsManager not available');
       }
@@ -947,7 +947,7 @@ export class Memori {
     const targetNamespace = namespace || this.config.namespace;
 
     try {
-      const statisticsManager = (this.dbManager as any).statisticsManager;
+      const statisticsManager = this.dbManager.getStatisticsManager();
       if (!statisticsManager) {
         throw new Error('StatisticsManager not available');
       }
@@ -997,28 +997,40 @@ export class Memori {
     const maxRelationships = options?.maxRelationships || 10;
 
     try {
-      // Get the RelationshipProcessor from the database manager
-      const relationshipProcessor = (this.dbManager as any).relationshipProcessor;
+      // Get RelationshipProcessor through MemoryAgent (which creates and manages it)
+      if (!this.memoryAgent) {
+        throw new Error('MemoryAgent not available - relationship processing requires provider initialization');
+      }
+      
+      // Access the relationship processor through memory agent
+      const relationshipProcessor = (this.memoryAgent as any).relationshipProcessor;
       if (!relationshipProcessor) {
-        throw new Error('RelationshipProcessor not available - ensure LLM provider is configured');
+        throw new Error('RelationshipProcessor not available in MemoryAgent - ensure LLM provider is configured');
       }
 
-      const relationships = await relationshipProcessor.extractRelationships(content, {
+      // Call with correct parameter structure
+      const relationshipResult = await relationshipProcessor.extractRelationships(content, {
+        sessionId: this.sessionId,
+        userPreferences: this.config.userContext?.userPreferences || [],
+        currentProjects: this.config.userContext?.currentProjects || [],
+        analysisDepth: 3,
         namespace: targetNamespace,
         minConfidence,
         maxRelationships,
-      });
+      }, []);
 
       logInfo('Extracted memory relationships', {
         component: 'Memori',
         namespace: targetNamespace,
         contentLength: content.length,
-        relationshipsFound: relationships.length,
+        relationshipsFound: relationshipResult.relationships.length,
         minConfidence,
         maxRelationships,
+        extractionMethod: relationshipResult.extractionMethod,
+        confidence: relationshipResult.confidence,
       });
 
-      return relationships;
+      return relationshipResult.relationships;
 
     } catch (error) {
       logError('Failed to extract memory relationships', {
@@ -1055,9 +1067,15 @@ export class Memori {
     const includeWeakRelationships = options?.includeWeakRelationships || false;
 
     try {
-      const relationshipProcessor = (this.dbManager as any).relationshipProcessor;
+      // Get RelationshipProcessor through MemoryAgent (which creates and manages it)
+      if (!this.memoryAgent) {
+        throw new Error('MemoryAgent not available - relationship processing requires provider initialization');
+      }
+      
+      // Access the relationship processor through memory agent
+      const relationshipProcessor = (this.memoryAgent as any).relationshipProcessor;
       if (!relationshipProcessor) {
-        throw new Error('RelationshipProcessor not available - ensure LLM provider is configured');
+        throw new Error('RelationshipProcessor not available in MemoryAgent - ensure LLM provider is configured');
       }
 
       const graph = await relationshipProcessor.buildRelationshipGraph(targetNamespace, {

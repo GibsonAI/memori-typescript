@@ -49,6 +49,7 @@ For Ollama or custom endpoints, supply `baseUrl` and the synthetic API key (`oll
   - [Basic Usage](basic-usage.md) – day-to-day patterns with `MemoriAI` plus pointers to advanced workflows.
   - [Memory Management](core-concepts/memory-management.md) – automatic vs conscious ingestion aligned with `Memori`.
   - [Search Strategies](core-concepts/search-strategies.md) – how strategies in `src/core/domain/search` are orchestrated.
+  - [Category Hierarchy](core-concepts/category-hierarchy.md) – hierarchical category management with `CategoryHierarchyManager` and `CategoryMetadataExtractor`.
 
 - **Architecture**
   - [System Overview](architecture/system-overview.md) – code-level overview of domain and infrastructure layers.

@@ -28,6 +28,55 @@ All operations are logged with structured payloads (component name, latency, str
 | `TEMPORAL_FILTER` | `temporal/TemporalFilterStrategy` | Interpret `TemporalFilterOptions` (ranges, relative expressions). |
 | `METADATA_FILTER` | `filtering/MetadataFilterStrategy` | Apply structured metadata filters and advanced expressions. |
 | `RELATIONSHIP` | `relationship/RelationshipTraversalStrategy` | Traverse memory relationships stored in JSON columns. |
+```
+
+### Category Hierarchy Integration
+
+The search architecture includes comprehensive category hierarchy support through two key components:
+
+#### CategoryMetadataExtractor
+Located in `src/core/domain/search/filtering/CategoryMetadataExtractor.ts`, this component:
+
+- **Extracts categories** from memory content using pattern matching and ML (when enabled)
+- **Resolves hierarchy paths** for each detected category using the hierarchy manager
+- **Provides virtual hierarchy support** for unknown categories
+- **Supports batch processing** with optimized hierarchy operations
+- **Generates related category suggestions** based on hierarchy relationships
+
+#### CategoryHierarchyManager
+Located in `src/core/domain/search/filtering/CategoryHierarchyManager.ts`, this component:
+
+- **Manages category hierarchies** with parent-child relationships
+- **Provides traversal operations** (getDescendants, getAncestors, getCommonAncestor)
+- **Supports search and validation** of category structures
+- **Enables hierarchy import/export** for persistence
+- **Implements caching** for efficient performance
+
+#### Integration Flow
+
+1. **Memory Processing** → `CategoryMetadataExtractor` extracts categories
+2. **Hierarchy Resolution** → `CategoryHierarchyManager` provides hierarchy context
+3. **Search Integration** → Category information included in search results
+4. **User Display** → Hierarchical categories shown with full paths
+
+```typescript
+// Example integration
+const hierarchyManager = new CategoryHierarchyManager();
+hierarchyManager.addCategory('Programming/Languages');
+
+const extractor = new CategoryMetadataExtractor(hierarchyManager);
+const result = await extractor.extractCategories({
+  content: 'I love Python programming'
+});
+
+console.log(result.categories);
+// [{
+//   name: 'Languages',
+//   hierarchyPath: 'Programming/Languages', // Full path context
+//   confidence: 0.8,
+//   source: 'pattern'
+// }]
+```
 
 Each strategy inherits from `BaseSearchStrategy`, gaining logging, timeout handling, and configuration validation automatically.
 

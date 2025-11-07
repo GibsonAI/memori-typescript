@@ -1,7 +1,7 @@
 /**
  * Configuration validation for Memori API
  */
-import { ValidationResult, MemoriError } from './types';
+import { ValidationResult } from './types';
 import { MemoriConfig } from '../core/infrastructure/config/ConfigManager';
 
 /**

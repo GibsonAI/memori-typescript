@@ -58,3 +58,26 @@ export {
 // Performance monitoring services
 export { PerformanceDashboardService } from './core/performance/PerformanceDashboard';
 export { PerformanceAnalyticsService } from './core/performance/PerformanceAnalyticsService';
+
+// Category Hierarchy and Search Components
+export { CategoryHierarchyManager, CategoryHierarchyUtils } from './core/domain/search/filtering/CategoryHierarchyManager';
+export {
+  CategoryMetadataExtractor,
+  CategoryExtractionUtils,
+  type CategoryExtractionConfig,
+  type CategoryExtractionRule,
+  type CategoryExtractionResult,
+  type ExtractedCategory,
+  type MemoryMetadata,
+  type PatternExtractionResult
+} from './core/domain/search/filtering/CategoryMetadataExtractor';
+
+// Search Strategy and related types
+export {
+  SearchStrategy
+} from './core/domain/search/types';
+
+// Category-based search components
+export { CategoryFilterStrategy } from './core/domain/search/filtering/CategoryFilterStrategy';
+export { CategoryBasedRelevance, CategoryRelevanceUtils } from './core/domain/search/filtering/CategoryBasedRelevance';
+export { CategoryAggregationEngine, CategoryAggregationUtils } from './core/domain/search/filtering/CategoryAggregation';
