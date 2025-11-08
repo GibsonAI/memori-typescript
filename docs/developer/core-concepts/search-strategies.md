@@ -13,11 +13,99 @@ enum SearchStrategy {
   RECENT = 'recent',
   SEMANTIC = 'semantic',
   CATEGORY_FILTER = 'category_filter',
-  TEMPORAL_FILTER = 'temporal_filter',
-  METADATA_FILTER = 'metadata_filter',
-  RELATIONSHIP = 'relationship'
-}
-```
+    TEMPORAL_FILTER = 'temporal_filter',
+    METADATA_FILTER = 'metadata_filter',
+    RELATIONSHIP = 'relationship'
+  }
+  ```
+  
+  ## Category and Hierarchy Support
+  
+  The search system provides sophisticated category management through the `CategoryMetadataExtractor` and `CategoryHierarchyManager` components. These work together to provide:
+  
+  ### Hierarchical Category Extraction
+  
+  The `CategoryMetadataExtractor` automatically detects categories from memory content and assigns them hierarchical paths:
+  
+  ```typescript
+  import { CategoryMetadataExtractor, CategoryHierarchyManager } from 'memorits';
+  
+  // Create hierarchy manager with category structure
+  const hierarchyManager = new CategoryHierarchyManager();
+  hierarchyManager.addCategory('Programming/Languages');
+  hierarchyManager.addCategory('Programming/Frameworks');
+  hierarchyManager.addCategory('Technology/Databases');
+  
+  // Create extractor with hierarchy integration
+  const extractor = new CategoryMetadataExtractor(hierarchyManager);
+  
+  // Extract categories with hierarchy paths
+  const result = await extractor.extractCategories({
+    content: 'I love working with Python and React for web development'
+  });
+  
+  console.log(result.categories[0]);
+  // {
+  //   name: 'Languages',
+  //   hierarchyPath: 'Programming/Languages', // ✅ Hierarchical context
+  //   confidence: 0.8,
+  //   source: 'pattern',
+  //   normalizedName: 'languages',
+  //   relevanceScore: 0.9
+  // }
+  ```
+  
+  ### Category Hierarchy Management
+  
+  The `CategoryHierarchyManager` provides advanced operations for working with category hierarchies:
+  
+  ```typescript
+  // Build hierarchy from category paths
+  const categories = ['Programming/Languages', 'Programming/Frameworks', 'Technology/Cloud'];
+  const root = hierarchyManager.buildHierarchy(categories);
+  
+  // Traverse hierarchy
+  const descendants = hierarchyManager.getDescendants('Programming');
+  // Returns: ['Languages', 'Frameworks'] and their children
+  
+  const ancestors = hierarchyManager.getAncestors('Languages');
+  // Returns: [{ name: 'Programming', fullPath: 'Programming', ... }]
+  
+  // Search and validation
+  const matches = hierarchyManager.searchCategories('frame', 5);
+  const validation = hierarchyManager.validateHierarchy();
+  ```
+  
+  ### Advanced Category Features
+  
+  - **Pattern-Based Hierarchy**: Automatic hierarchy suggestion based on extraction patterns
+  - **Virtual Hierarchies**: Support for categories not in the main hierarchy
+  - **Batch Processing**: Efficient hierarchy operations for multiple categories
+  - **Related Categories**: Smart suggestions based on hierarchy relationships
+  - **Validation**: Consistency checking for hierarchy structures
+  
+  ### Category-Based Search
+  
+  Use category filters with hierarchy awareness:
+  
+  ```typescript
+  // Search with category filtering
+  const results = await memori.searchMemories('JavaScript tutorial', {
+    includeMetadata: true,
+    strategy: SearchStrategy.CATEGORY_FILTER
+  });
+  
+  // Results include hierarchical category information
+  console.log(results[0].metadata.categories);
+  // [
+  //   {
+  //     name: 'Languages',
+  //     hierarchyPath: 'Programming/Languages',
+  //     confidence: 0.8,
+  //     relevanceScore: 0.9
+  //   }
+  // ]
+  ```
 
 Each strategy lives in its own class (see `src/core/domain/search/strategies` and sibling folders) and is registered by `SearchService` when the necessary prerequisites are met (for example, the FTS5 strategy is skipped when SQLite lacks FTS5).
 

@@ -28,7 +28,7 @@ import {
   SearchOptions,
   MemorySearchResult,
   EmbeddingParams,
-  EmbeddingResponse
+  EmbeddingResponse,
 } from './MemoriAIConfig';
 
 /**
@@ -54,7 +54,7 @@ export class MemoriAI {
     this.userProvider = this.createUserProvider(config);
 
     // Create optimized Memori instance for memory operations
-    const memoriConfig: any = {
+    const memoriConfig: MemoriAIConfig = {
       databaseUrl: config.databaseUrl,
       apiKey: config.apiKey,
       model: config.model || 'gpt-4o-mini', // Provide default model if not specified
@@ -70,7 +70,7 @@ export class MemoriAI {
       } else if (typeof config.memoryProvider === 'object') {
         // If memoryProvider is an object, extract the provider type
         memoriConfig.provider = config.memoryProvider.provider || 'openai';
-        memoriConfig.apiKey = config.memoryProvider.apiKey;
+        memoriConfig.apiKey = config.memoryProvider.apiKey || "";
         memoriConfig.model = config.memoryProvider.model;
         memoriConfig.baseUrl = config.memoryProvider.baseUrl;
       }
@@ -111,14 +111,14 @@ export class MemoriAI {
         // Enable Memori if not already enabled
         try {
           await this.memori.enable();
-        } catch (error) {
+        } catch {
           // Memori might already be enabled, ignore the error
         }
 
         // Use the correct method to record conversation
         await this.memori.recordConversation(
           params.messages[0].content || 'User message',
-          response.message.content || 'AI response'
+          response.message.content || 'AI response',
         );
       }
 
@@ -251,7 +251,7 @@ export class MemoriAI {
       model?: string;
       metadata?: Record<string, any>;
       namespace?: string;
-    }
+    },
   ): Promise<string> {
     if (this.mode === 'automatic') {
       throw new Error('recordConversation() only available in manual/conscious modes. Use chat() for automatic mode.');
@@ -293,7 +293,7 @@ export class MemoriAI {
   async searchMemoriesWithStrategy(
     query: string,
     strategy: any,
-    options: SearchOptions = {}
+    options: SearchOptions = {},
   ): Promise<MemorySearchResult[]> {
     // Convert simplified options to internal format
     const convertedOptions = this.convertSearchOptions(options);
@@ -345,8 +345,8 @@ export class MemoriAI {
 
       features: {
         performance: performanceConfig,
-        memory: memoryConfig
-      }
+        memory: memoryConfig,
+      },
     };
   }
 
@@ -367,56 +367,56 @@ export class MemoriAI {
     };
 
     switch (mode) {
-      case 'automatic':
-        return {
-          performanceConfig: {
-            ...basePerformanceConfig,
-            // High performance for automatic mode
-            enableConnectionPooling: true,
-            enableCaching: true,
-          },
-          memoryConfig: {
-            ...baseMemoryConfig,
-            enableChatMemory: true,
-            memoryProcessingMode: 'auto' as const,
-          }
-        };
+    case 'automatic':
+      return {
+        performanceConfig: {
+          ...basePerformanceConfig,
+          // High performance for automatic mode
+          enableConnectionPooling: true,
+          enableCaching: true,
+        },
+        memoryConfig: {
+          ...baseMemoryConfig,
+          enableChatMemory: true,
+          memoryProcessingMode: 'auto' as const,
+        },
+      };
 
-      case 'manual':
-        return {
-          performanceConfig: {
-            ...basePerformanceConfig,
-            // Moderate performance for manual mode
-            enableConnectionPooling: false,
-            enableCaching: false,
-          },
-          memoryConfig: {
-            ...baseMemoryConfig,
-            enableChatMemory: false, // Manual control
-            memoryProcessingMode: 'none' as const, // Manual control - no auto processing
-          }
-        };
+    case 'manual':
+      return {
+        performanceConfig: {
+          ...basePerformanceConfig,
+          // Moderate performance for manual mode
+          enableConnectionPooling: false,
+          enableCaching: false,
+        },
+        memoryConfig: {
+          ...baseMemoryConfig,
+          enableChatMemory: false, // Manual control
+          memoryProcessingMode: 'none' as const, // Manual control - no auto processing
+        },
+      };
 
-      case 'conscious':
-        return {
-          performanceConfig: {
-            ...basePerformanceConfig,
-            // Balanced performance for conscious mode
-            enableConnectionPooling: true,
-            enableCaching: true,
-          },
-          memoryConfig: {
-            ...baseMemoryConfig,
-            enableChatMemory: false, // Conscious control
-            memoryProcessingMode: 'conscious' as const,
-          }
-        };
+    case 'conscious':
+      return {
+        performanceConfig: {
+          ...basePerformanceConfig,
+          // Balanced performance for conscious mode
+          enableConnectionPooling: true,
+          enableCaching: true,
+        },
+        memoryConfig: {
+          ...baseMemoryConfig,
+          enableChatMemory: false, // Conscious control
+          memoryProcessingMode: 'conscious' as const,
+        },
+      };
 
-      default:
-        return {
-          performanceConfig: basePerformanceConfig,
-          memoryConfig: baseMemoryConfig
-        };
+    default:
+      return {
+        performanceConfig: basePerformanceConfig,
+        memoryConfig: baseMemoryConfig,
+      };
     }
   }
 
@@ -522,10 +522,10 @@ export class MemoriAI {
   private getProviderClass(providerType: ProviderType): new (config: IProviderConfig) => MemoryCapableProvider {
     // Note: Importing the same providers at the top of the file
     switch (providerType) {
-      case ProviderType.OPENAI: return OpenAIProvider;
-      case ProviderType.ANTHROPIC: return AnthropicProvider;
-      case ProviderType.OLLAMA: return OllamaProvider;
-      default: return OpenAIProvider;
+    case ProviderType.OPENAI: return OpenAIProvider;
+    case ProviderType.ANTHROPIC: return AnthropicProvider;
+    case ProviderType.OLLAMA: return OllamaProvider;
+    default: return OpenAIProvider;
     }
   }
 
@@ -563,11 +563,11 @@ export class MemoriAI {
    */
   private mapImportanceLevel(level: 'low' | 'medium' | 'high' | 'critical'): MemoryImportanceLevel {
     switch (level) {
-      case 'low': return MemoryImportanceLevel.LOW;
-      case 'medium': return MemoryImportanceLevel.MEDIUM;
-      case 'high': return MemoryImportanceLevel.HIGH;
-      case 'critical': return MemoryImportanceLevel.CRITICAL;
-      default: return MemoryImportanceLevel.MEDIUM;
+    case 'low': return MemoryImportanceLevel.LOW;
+    case 'medium': return MemoryImportanceLevel.MEDIUM;
+    case 'high': return MemoryImportanceLevel.HIGH;
+    case 'critical': return MemoryImportanceLevel.CRITICAL;
+    default: return MemoryImportanceLevel.MEDIUM;
     }
   }
 
@@ -583,14 +583,14 @@ export class MemoriAI {
 
       // Otherwise map from string
       switch (cat.toLowerCase()) {
-        case 'essential': return MemoryClassification.ESSENTIAL;
-        case 'contextual': return MemoryClassification.CONTEXTUAL;
-        case 'conversational': return MemoryClassification.CONVERSATIONAL;
-        case 'reference': return MemoryClassification.REFERENCE;
-        case 'personal': return MemoryClassification.PERSONAL;
-        case 'conscious-info': return MemoryClassification.CONSCIOUS_INFO;
-        case 'important': return MemoryClassification.ESSENTIAL; // Map "IMPORTANT" to ESSENTIAL
-        default: return MemoryClassification.CONVERSATIONAL;
+      case 'essential': return MemoryClassification.ESSENTIAL;
+      case 'contextual': return MemoryClassification.CONTEXTUAL;
+      case 'conversational': return MemoryClassification.CONVERSATIONAL;
+      case 'reference': return MemoryClassification.REFERENCE;
+      case 'personal': return MemoryClassification.PERSONAL;
+      case 'conscious-info': return MemoryClassification.CONSCIOUS_INFO;
+      case 'important': return MemoryClassification.ESSENTIAL; // Map "IMPORTANT" to ESSENTIAL
+      default: return MemoryClassification.CONVERSATIONAL;
       }
     });
   }

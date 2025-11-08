@@ -221,7 +221,19 @@ export class DatabaseManager {
     // Initialize FTSManager - schema will be initialized lazily when needed
     this.ftsManager = new FTSManager(this.prisma);
 
-    this.searchManager = new SearchManager(this.databaseContext, this.ftsManager);
+    try {
+      this.searchManager = new SearchManager(this.databaseContext, this.ftsManager);
+      logInfo('SearchManager initialized successfully', {
+        component: 'DatabaseManager',
+      });
+    } catch (error) {
+      logError('Failed to initialize SearchManager', {
+        component: 'DatabaseManager',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
 
     // Initialize managers with complex dependencies
     const transactionCoordinator = new TransactionCoordinator(this.databaseContext);
@@ -1133,5 +1145,52 @@ export class DatabaseManager {
       this.stopConsolidationScheduling();
       this.startConsolidationScheduling();
     }
+  }
+
+  // ===== ACCESSOR METHODS FOR PRIVATE PROPERTIES =====
+  
+  /**
+   * Get SearchManager instance for direct access
+   */
+  public getSearchManager(): SearchManager {
+    if (!this.searchManager) {
+      logError('SearchManager is not initialized', {
+        component: 'DatabaseManager',
+        error: 'SearchManager instance is null or undefined'
+      });
+      throw new Error('SearchManager is not initialized. This may be due to a constructor initialization failure.');
+    }
+    return this.searchManager;
+  }
+
+  /**
+   * Get ChatHistoryManager instance for direct access
+   */
+  public getChatHistoryManager(): ChatHistoryManager {
+    return this.chatHistoryManager;
+  }
+
+  /**
+   * Get DuplicateManager instance for direct access
+   */
+  public getDuplicateManager(): DuplicateManager {
+    return this.duplicateManager;
+  }
+
+  /**
+   * Get StatisticsManager instance for direct access
+   */
+  public getStatisticsManager(): StatisticsManager {
+    return this.statisticsManager;
+  }
+
+  /**
+   * Get RelationshipService instance as relationshipProcessor
+   */
+  public getRelationshipProcessor(): RelationshipService {
+    if (!this.relationshipService) {
+      throw new Error('RelationshipService not available - relationship processing not initialized');
+    }
+    return this.relationshipService;
   }
 }

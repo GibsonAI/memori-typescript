@@ -61,16 +61,14 @@ describe('Memori', () => {
     // Setup method mocks
     MockDatabaseManager.prototype.storeChatHistory = jest.fn().mockResolvedValue('mock-uuid');
     MockDatabaseManager.prototype.storeLongTermMemory = jest.fn().mockResolvedValue('memory-id');
+    
     // Mock the DatabaseManager instance methods
     mockSearchManager = {
       searchMemories: jest.fn().mockResolvedValue([])
     };
 
-    // Setup the mock to return searchManager when accessed
-    Object.defineProperty(MockDatabaseManager.prototype, 'searchManager', {
-      get: () => mockSearchManager,
-      configurable: true
-    });
+    // Setup the mock to return searchManager when getSearchManager() is called
+    MockDatabaseManager.prototype.getSearchManager = jest.fn().mockReturnValue(mockSearchManager);
     MockDatabaseManager.prototype.close = jest.fn().mockResolvedValue(undefined);
     MockMemoryAgent.prototype.processConversation = jest.fn().mockResolvedValue({ content: 'processed' });
 

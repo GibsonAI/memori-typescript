@@ -102,7 +102,7 @@ async function requirePrismaCli(): Promise<string> {
     const { createRequire } = await import('module');
     const require = createRequire(import.meta.url);
     return require.resolve('prisma/build/index.js');
-  } catch (error) {
+  } catch {
     throw new Error(
       'Unable to resolve Prisma CLI. Ensure the "prisma" package is installed as a dependency.',
     );
