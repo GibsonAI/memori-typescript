@@ -1,10 +1,16 @@
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
-import { terser } from '@rollup/plugin-terser';
+import terser from '@rollup/plugin-terser';
+import dts from 'rollup-plugin-dts';
 import path from 'path';
 import fs from 'fs';
 
-export default {
+const externalDeps = [
+  'crypto', 'util', 'stream', 'events', 'os', 'path', 'url', 'querystring', 'buffer', 'process',
+  '@prisma/client', 'openai', '@anthropic-ai/sdk', 'uuid', 'winston', 'zod', 'module'
+];
+
+const jsConfig = {
   input: 'dist/src/index.js',
   output: [
     {
@@ -65,10 +71,7 @@ export default {
       }
     }
   ],
-  external: [
-    'crypto', 'util', 'stream', 'events', 'os', 'path', 'url', 'querystring', 'buffer', 'process',
-    '@prisma/client', 'openai', '@anthropic-ai/sdk', 'uuid', 'winston', 'zod', 'module'
-  ],
+  external: externalDeps,
   treeshake: {
     moduleSideEffects: false,
     propertyReadSideEffects: false,
@@ -81,3 +84,16 @@ export default {
     warn(warning);
   },
 };
+
+const dtsConfig = {
+  input: 'dist/src/index.d.ts',
+  output: {
+    file: 'dist-bundle/index.d.ts',
+    format: 'es',
+    banner: '// 🚀 MemoriAI - Type Definitions\n',
+  },
+  plugins: [dts()],
+  external: externalDeps,
+};
+
+export default [jsConfig, dtsConfig];
