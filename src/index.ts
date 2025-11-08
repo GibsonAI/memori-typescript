@@ -60,7 +60,7 @@ export { PerformanceDashboardService } from './core/performance/PerformanceDashb
 export { PerformanceAnalyticsService } from './core/performance/PerformanceAnalyticsService';
 
 // Category Hierarchy and Search Components
-export { CategoryHierarchyManager, CategoryHierarchyUtils } from './core/domain/search/filtering/CategoryHierarchyManager';
+export { CategoryHierarchyManager } from './core/domain/search/filtering/CategoryHierarchyManager';
 export {
   CategoryMetadataExtractor,
   CategoryExtractionUtils,

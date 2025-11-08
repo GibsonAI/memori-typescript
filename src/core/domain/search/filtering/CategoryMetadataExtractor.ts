@@ -1,5 +1,5 @@
-import { CategoryHierarchyManager } from './CategoryHierarchyManager';
-import { logError, logWarn } from '../../../infrastructure/config/Logger';
+import { CategoryNode, CategoryHierarchyManager } from './CategoryHierarchyManager';
+import { logWarn } from '../../../infrastructure/config/Logger';
 
 /**
  * Configuration for category extraction
@@ -8,6 +8,10 @@ export interface CategoryExtractionConfig {
   enableMLExtraction: boolean;
   enablePatternExtraction: boolean;
   enableMetadataExtraction: boolean;
+  enableHierarchicalExpansion: boolean;
+  enableHierarchyValidation: boolean;
+  enableCategorySuggestions: boolean;
+  enableBatchProcessing: boolean;
   confidenceThreshold: number;
   maxCategoriesPerMemory: number;
   enableCategoryNormalization: boolean;
@@ -185,6 +189,10 @@ export class CategoryMetadataExtractor {
       enableMLExtraction: false,
       enablePatternExtraction: true,
       enableMetadataExtraction: true,
+      enableHierarchicalExpansion: false, // Disabled by default due to memory concerns
+      enableHierarchyValidation: false,   // Disabled by default due to memory concerns
+      enableCategorySuggestions: false,   // Disabled by default due to memory concerns
+      enableBatchProcessing: false,
       confidenceThreshold: 0.5,
       maxCategoriesPerMemory: 3,
       enableCategoryNormalization: true,
@@ -225,7 +233,7 @@ export class CategoryMetadataExtractor {
         operation: 'extractCategories',
         error: error instanceof Error ? error.message : String(error)
       });
-      return this.createFallbackResult(metadata);
+      return await this.createFallbackResult(metadata);
     }
   }
 
@@ -323,7 +331,7 @@ export class CategoryMetadataExtractor {
       if (this.config.enableMetadataExtraction && metadata.existingCategories) {
         for (const category of metadata.existingCategories) {
           const normalized = this.normalizeCategory(category);
-          const categoryNode = this.resolveCategoryHierarchy(category);
+          const categoryNode = await this.resolveCategoryHierarchy(category);
           
           allCategories.set(normalized, {
             name: category,
@@ -331,7 +339,7 @@ export class CategoryMetadataExtractor {
             confidence: 0.9,
             source: 'metadata',
             normalizedName: normalized,
-            relevanceScore: this.calculateHierarchicalRelevanceScore(category, categoryNode, metadata),
+            relevanceScore: await this.calculateHierarchicalRelevanceScore(category, categoryNode, metadata),
           });
         }
       }
@@ -341,7 +349,7 @@ export class CategoryMetadataExtractor {
         const patternResults = this.extractFromPatterns(metadata);
         for (const result of patternResults) {
           const normalized = this.normalizeCategory(result.category);
-          const categoryNode = this.resolveCategoryHierarchy(result.category);
+          const categoryNode = await this.resolveCategoryHierarchy(result.category);
           const existing = allCategories.get(normalized);
 
           if (!existing || existing.confidence < result.confidence) {
@@ -351,7 +359,7 @@ export class CategoryMetadataExtractor {
               confidence: result.confidence,
               source: 'pattern',
               normalizedName: normalized,
-              relevanceScore: this.calculateHierarchicalRelevanceScore(result.category, categoryNode, metadata),
+              relevanceScore: await this.calculateHierarchicalRelevanceScore(result.category, categoryNode, metadata),
             });
           }
         }
@@ -362,7 +370,7 @@ export class CategoryMetadataExtractor {
         const mlResults = await this.extractFromML(metadata);
         for (const result of mlResults) {
           const normalized = this.normalizeCategory(result.name);
-          const categoryNode = this.resolveCategoryHierarchy(result.name);
+          const categoryNode = await this.resolveCategoryHierarchy(result.name);
           const existing = allCategories.get(normalized);
 
           if (!existing || existing.confidence < result.confidence) {
@@ -380,6 +388,33 @@ export class CategoryMetadataExtractor {
 
       // Convert to array and filter by confidence
       extractedCategories.push(...Array.from(allCategories.values()));
+
+      // Phase 2: Apply hierarchical pattern expansion (if enabled)
+      let expandedCategories: ExtractedCategory[] = [];
+      if (this.config.enableHierarchicalExpansion) {
+        expandedCategories = this.applyHierarchicalPatternExpansion(extractedCategories);
+        extractedCategories.push(...expandedCategories);
+      }
+
+      // Phase 2: Add related category suggestions (if enabled)
+      let categorySuggestions: ExtractedCategory[] = [];
+      if (this.config.enableCategorySuggestions) {
+        const allCategoriesForSuggestions = [...extractedCategories, ...expandedCategories];
+        categorySuggestions = allCategoriesForSuggestions.flatMap(cat => this.suggestRelatedCategories(cat));
+        extractedCategories.push(...categorySuggestions);
+      }
+
+      // Phase 2: Validate all categories (if enabled)
+      let hasValidationErrors = false;
+      let validationWarnings: string[] = [];
+      if (this.config.enableHierarchyValidation) {
+        const allCategoriesForValidation = [...extractedCategories, ...expandedCategories];
+        const validationResults = allCategoriesForValidation.map(cat => this.validateCategoryHierarchy(cat));
+        hasValidationErrors = validationResults.some(result => !result.isValid);
+        validationWarnings = validationResults.flatMap(result => result.warnings);
+      }
+
+      // Sort by confidence and relevance
       extractedCategories.sort((a, b) => b.confidence - a.confidence);
 
       // Apply confidence threshold and limit
@@ -403,11 +438,14 @@ export class CategoryMetadataExtractor {
           totalCategoriesFound: extractedCategories.length,
           categoriesFiltered: extractedCategories.length - filteredCategories.length,
           extractionTimestamp: new Date().toISOString(),
+          validationErrors: hasValidationErrors,
+          validationWarnings,
+          categorySuggestions: categorySuggestions.length,
         },
       };
     } catch (error) {
       // If anything fails, return fallback result
-      return this.createFallbackResult(metadata);
+      return await this.createFallbackResult(metadata);
     }
   }
 
@@ -427,20 +465,38 @@ export class CategoryMetadataExtractor {
       matchPosition: number;
     }> = [];
 
-    const textToSearch = [
+    // Memory safeguard: Limit total text size for processing
+    const maxTextLength = 10000; // 10KB limit
+    const textParts = [
       metadata.content,
       metadata.summary || '',
       ...(metadata.tags || []),
       ...(metadata.entities || []),
       ...(metadata.topics || []),
       ...(metadata.keywords || []),
-    ].join(' ').toLowerCase();
+    ];
+    
+    // Build text with size limit
+    let textToSearch = '';
+    for (const part of textParts) {
+      if (textToSearch.length + part.length > maxTextLength) {
+        textToSearch += ' ' + part.substring(0, maxTextLength - textToSearch.length);
+        break;
+      }
+      textToSearch += (textToSearch ? ' ' : '') + part;
+    }
+    textToSearch = textToSearch.toLowerCase();
 
     // Apply each extraction rule
     const enabledRules = this.extractionRules.filter(r => r.enabled);
     for (const rule of enabledRules) {
-      const matches = this.findMatches(textToSearch, rule);
-      results.push(...matches);
+      try {
+        const matches = this.findMatches(textToSearch, rule);
+        results.push(...matches);
+      } catch (error) {
+        console.warn(`Pattern matching failed for rule ${rule.name}:`, error);
+        continue;
+      }
     }
 
     // Remove duplicates and sort by confidence
@@ -471,18 +527,51 @@ export class CategoryMetadataExtractor {
       matchPosition: number;
     }> = [];
 
+    // Memory and performance safeguards
+    if (!text || text.length === 0) {
+      return results;
+    }
+
     let match;
     const regex = typeof rule.pattern === 'string'
       ? new RegExp(rule.pattern, 'gi')
       : rule.pattern;
 
+    // Reset regex state to prevent issues
+    regex.lastIndex = 0;
+
     let matchCount = 0;
-    const maxMatches = 100; // Safety limit to prevent infinite loops
+    const maxMatches = 50; // Reduced limit for better performance
     let lastIndex = 0;
+    let consecutiveEmptyMatches = 0;
+
+    // Use a timeout-like mechanism to prevent hanging
+    const startTime = Date.now();
+    const maxTime = 100; // 100ms per rule
 
     while ((match = regex.exec(text)) !== null && matchCount < maxMatches) {
+      // Check time limit
+      if (Date.now() - startTime > maxTime) {
+        console.warn(`Pattern ${rule.name} timed out, stopping after ${matchCount} matches`);
+        break;
+      }
+
+      // Prevent infinite loops from regex backtracking
+      if (match[0] === '') {
+        consecutiveEmptyMatches++;
+        if (consecutiveEmptyMatches > 3) {
+          console.warn(`Pattern ${rule.name} had too many empty matches, stopping`);
+          break;
+        }
+        // Move regex forward manually
+        regex.lastIndex++;
+        continue;
+      }
+      consecutiveEmptyMatches = 0;
+
       // Prevent infinite loop by ensuring we're progressing through the string
-      if (match.index === lastIndex && match[0] === '') {
+      if (match.index === lastIndex && matchCount > 0) {
+        console.warn(`Pattern ${rule.name} stuck at same position, stopping`);
         break;
       }
       lastIndex = match.index;
@@ -498,11 +587,16 @@ export class CategoryMetadataExtractor {
         matchPosition: match.index,
       });
 
+      matchCount++;
+
       // Safety break: if we've reached the end of the string, stop
       if (match.index + match[0].length >= text.length) {
         break;
       }
     }
+
+    // Reset regex state for potential reuse
+    regex.lastIndex = 0;
 
     return results;
   }
@@ -538,7 +632,7 @@ export class CategoryMetadataExtractor {
   /**
    * Resolve a detected category into proper hierarchy structure
    */
-  private resolveCategoryHierarchy(categoryName: string): import('./CategoryHierarchyManager').CategoryNode | null {
+  private resolveCategoryHierarchy(categoryName: string): CategoryNode | null {
     // Try exact match first
     const exactMatch = this.hierarchyManager.getNode(categoryName);
     if (exactMatch) return exactMatch;
@@ -578,6 +672,47 @@ export class CategoryMetadataExtractor {
   }
 
   /**
+   * Apply hierarchical pattern expansion to extracted categories
+   */
+  private applyHierarchicalPatternExpansion(categories: ExtractedCategory[]): ExtractedCategory[] {
+    const expanded: ExtractedCategory[] = [];
+    
+    // Memory safeguard: Limit expansion to prevent memory issues
+    const maxExpanded = 5;
+    let expansionCount = 0;
+    
+    for (const category of categories) {
+      if (expansionCount >= maxExpanded) break;
+      
+      // Find the rule that generated this category
+      const rule = this.extractionRules.find(r => r.enabled && r.hierarchical && r.category === category.name);
+      
+      if (rule && rule.hierarchySuggestion) {
+        const baseHierarchy = rule.hierarchySuggestion;
+        
+        // Create parent category suggestion
+        const parentCategory = baseHierarchy.split('/').pop() || baseHierarchy;
+        const parentCategoryPath = baseHierarchy;
+        
+        // Add parent category with lower confidence (and only if different)
+        if (parentCategory !== category.name) {
+          expanded.push({
+            name: parentCategory,
+            hierarchyPath: parentCategoryPath,
+            confidence: category.confidence * 0.7,
+            source: 'hierarchy_suggestion' as const,
+            normalizedName: this.normalizeCategory(parentCategory),
+            relevanceScore: category.relevanceScore * 0.7,
+          });
+          expansionCount++;
+        }
+      }
+    }
+    
+    return expanded;
+  }
+
+  /**
    * Expand a pattern into multiple hierarchical rules
    */
   private expandHierarchicalPatterns(rule: CategoryExtractionRule): CategoryExtractionRule[] {
@@ -610,7 +745,7 @@ export class CategoryMetadataExtractor {
   /**
    * Create virtual hierarchy node for categories not in the hierarchy
    */
-  private createVirtualHierarchyNode(categoryName: string): import('./CategoryHierarchyManager').CategoryNode {
+  private createVirtualHierarchyNode(categoryName: string): CategoryNode {
     return {
       id: this.normalizeCategory(categoryName),
       name: categoryName,
@@ -674,9 +809,14 @@ export class CategoryMetadataExtractor {
     
     if (!categoryNode) return suggestions;
     
+    // Memory safeguard: Limit suggestions to prevent infinite loops
+    const maxSuggestions = 3;
+    let suggestionCount = 0;
+    
     // Suggest sibling categories
     const siblings = this.getSiblingCategories(categoryNode);
-    siblings.forEach(sibling => {
+    for (const sibling of siblings) {
+      if (suggestionCount >= maxSuggestions) break;
       suggestions.push({
         name: sibling.name,
         hierarchyPath: sibling.fullPath,
@@ -685,20 +825,23 @@ export class CategoryMetadataExtractor {
         normalizedName: sibling.id,
         relevanceScore: category.relevanceScore * 0.7,
       });
-    });
+      suggestionCount++;
+    }
     
-    // Suggest parent category
-    const ancestors = this.hierarchyManager.getAncestors(category.name);
-    if (ancestors.length > 0) {
-      const parent = ancestors[ancestors.length - 1];
-      suggestions.push({
-        name: parent.name,
-        hierarchyPath: parent.fullPath,
-        confidence: category.confidence * 0.8,
-        source: 'hierarchy_suggestion',
-        normalizedName: parent.id,
-        relevanceScore: category.relevanceScore * 0.8,
-      });
+    // Suggest parent category (only if we haven't exceeded the limit)
+    if (suggestionCount < maxSuggestions) {
+      const ancestors = this.hierarchyManager.getAncestors(category.name);
+      if (ancestors.length > 0) {
+        const parent = ancestors[ancestors.length - 1];
+        suggestions.push({
+          name: parent.name,
+          hierarchyPath: parent.fullPath,
+          confidence: category.confidence * 0.8,
+          source: 'hierarchy_suggestion',
+          normalizedName: parent.id,
+          relevanceScore: category.relevanceScore * 0.8,
+        });
+      }
     }
     
     return suggestions;
@@ -707,7 +850,7 @@ export class CategoryMetadataExtractor {
   /**
    * Get sibling categories for a given category node
    */
-  private getSiblingCategories(categoryNode: import('./CategoryHierarchyManager').CategoryNode): import('./CategoryHierarchyManager').CategoryNode[] {
+  private getSiblingCategories(categoryNode: CategoryNode): CategoryNode[] {
     if (!categoryNode.parentId) return [];
     
     const parentNode = this.hierarchyManager.getNode(categoryNode.parentId);
@@ -721,7 +864,7 @@ export class CategoryMetadataExtractor {
    */
   private calculateHierarchicalRelevanceScore(
     category: string,
-    categoryNode: import('./CategoryHierarchyManager').CategoryNode | null,
+    categoryNode: CategoryNode | null,
     metadata: MemoryMetadata
   ): number {
     let score = 0.5; // Base score
@@ -950,8 +1093,8 @@ export class CategoryMetadataExtractor {
   /**
    * Batch resolve hierarchy for multiple categories
    */
-  private batchResolveHierarchy(categoryNames: string[]): Map<string, import('./CategoryHierarchyManager').CategoryNode> {
-    const hierarchyMap = new Map<string, import('./CategoryHierarchyManager').CategoryNode>();
+  private batchResolveHierarchy(categoryNames: string[]): Map<string, CategoryNode> {
+    const hierarchyMap = new Map<string, CategoryNode>();
     
     // Process categories synchronously
     for (const categoryName of categoryNames) {
@@ -988,9 +1131,9 @@ export class CategoryMetadataExtractor {
   /**
    * Create fallback result when extraction fails
    */
-  private createFallbackResult(metadata: MemoryMetadata): CategoryExtractionResult {
+  private async createFallbackResult(metadata: MemoryMetadata): Promise<CategoryExtractionResult> {
     const fallbackCategory = metadata.existingCategories?.[0] || 'General';
-    const categoryNode = this.resolveCategoryHierarchy(fallbackCategory);
+    const categoryNode = await this.resolveCategoryHierarchy(fallbackCategory);
 
     return {
       categories: [{
@@ -1024,6 +1167,10 @@ export class CategoryExtractionUtils {
       enableMLExtraction: false,
       enablePatternExtraction: true,
       enableMetadataExtraction: true,
+      enableHierarchicalExpansion: false, // Disabled by default
+      enableHierarchyValidation: false,   // Disabled by default
+      enableCategorySuggestions: false,   // Disabled by default
+      enableBatchProcessing: false,
       confidenceThreshold: 0.5,
       maxCategoriesPerMemory: 3,
       enableCategoryNormalization: true,
@@ -1040,6 +1187,10 @@ export class CategoryExtractionUtils {
       enableMLExtraction: false,
       enablePatternExtraction: true,
       enableMetadataExtraction: true,
+      enableHierarchicalExpansion: false,
+      enableHierarchyValidation: false,
+      enableCategorySuggestions: false,
+      enableBatchProcessing: true,
       confidenceThreshold: 0.7,
       maxCategoriesPerMemory: 2,
       enableCategoryNormalization: true,
@@ -1049,13 +1200,17 @@ export class CategoryExtractionUtils {
   }
 
   /**
-   * Create configuration optimized for accuracy
+   * Create configuration optimized for accuracy (with memory safeguards)
    */
   static createAccuracyConfig(): CategoryExtractionConfig {
     return {
       enableMLExtraction: true,
       enablePatternExtraction: true,
       enableMetadataExtraction: true,
+      enableHierarchicalExpansion: false, // Still disabled even for accuracy due to memory concerns
+      enableHierarchyValidation: false,   // Still disabled due to memory concerns
+      enableCategorySuggestions: false,   // Still disabled due to memory concerns
+      enableBatchProcessing: false,
       confidenceThreshold: 0.3,
       maxCategoriesPerMemory: 5,
       enableCategoryNormalization: true,

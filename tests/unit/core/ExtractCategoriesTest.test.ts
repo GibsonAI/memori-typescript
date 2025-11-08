@@ -40,16 +40,17 @@ describe('Extract Categories Test', () => {
   it('should test pattern extraction separately', async () => {
     console.log('Testing pattern extraction...');
     
-    const metadata: MemoryMetadata = { 
-      content: 'JavaScript is a programming language' 
+    const metadata: MemoryMetadata = {
+      content: 'JavaScript is a programming language'
     };
     
-    // Test the pattern extraction directly
-    const patternResults = extractor['extractFromPatterns'](metadata);
-    console.log('Pattern results:', patternResults);
+    // Test through the main API instead of calling private method
+    const result = await extractor.extractCategories(metadata);
+    console.log('Pattern extraction test result:', result);
     
-    expect(patternResults).toBeDefined();
-    expect(Array.isArray(patternResults)).toBe(true);
+    expect(result).toBeDefined();
+    expect(result.categories).toBeDefined();
+    expect(Array.isArray(result.categories)).toBe(true);
     
     console.log('Pattern extraction test completed');
   });
