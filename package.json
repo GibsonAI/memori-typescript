@@ -76,6 +76,7 @@
     "index:backup": "tsx examples/scripts/index-backup.ts"
   },
   "devDependencies": {
+    "rollup-plugin-dts": "^6.1.1",
     "@rollup/plugin-commonjs": "^29.0.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^0.4.4",
