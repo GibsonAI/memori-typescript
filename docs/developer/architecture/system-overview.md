@@ -43,31 +43,65 @@ Each stage logs structured payloads using `Logger.ts`, tagging the component (e.
 ### `MemoriAI`
 
 - Location: `src/core/MemoriAI.ts`
-- Designed for consumers who want a drop-in API: `chat`, `searchMemories`, `createEmbeddings`, `recordConversation` (manual mode), `getMemoryStatistics`, etc.
-- Delegates most heavy lifting to `Memori` while managing provider lifecycles.
+- Public surface (as implemented):
+  - `chat` – chat completion with optional automatic recording via `Memori` ([`MemoriAI.chat`](src/core/MemoriAI.ts:97))
+  - `searchMemories` / `searchMemoriesWithStrategy` – delegates to `Memori` search APIs ([`MemoriAI.searchMemories`](src/core/MemoriAI.ts:153), [`MemoriAI.searchMemoriesWithStrategy`](src/core/MemoriAI.ts:293))
+  - `getAvailableSearchStrategies` – enumerates supported strategies ([`MemoriAI.getAvailableSearchStrategies`](src/core/MemoriAI.ts:306))
+  - `createEmbeddings` – provider-backed embeddings API ([`MemoriAI.createEmbeddings`](src/core/MemoriAI.ts:167))
+  - `recordConversation` – manual/conscious mode recording wrapper ([`MemoriAI.recordConversation`](src/core/MemoriAI.ts:247))
+  - `getMemoryStatistics` – statistics via underlying `Memori` ([`MemoriAI.getMemoryStatistics`](src/core/MemoriAI.ts:286))
+  - `close` – disposes provider and `Memori` ([`MemoriAI.close`](src/core/MemoriAI.ts:203))
+- Delegates heavy lifting (ingestion, search, consolidation) to `Memori` while owning user-facing provider lifecycle.
 
 ### `Memori`
 
 - Location: `src/core/Memori.ts`
-- Exposes the full surface: strategy-aware search, conscious processing, index maintenance, duplication checks, and backup/restore helpers.
+- Key responsibilities (all verified in code):
+  - Ingestion:
+    - `enable` – initializes providers, `MemoryAgent`, optional `ConsciousAgent` ([`Memori.enable`](src/core/Memori.ts:174))
+    - `recordConversation` – stores chat + triggers ingestion based on mode ([`Memori.recordConversation`](src/core/Memori.ts:226))
+    - `processMemory` – runs `MemoryAgent.processConversation` + stores relationships when enabled ([`Memori.processMemory`](src/core/Memori.ts:277))
+    - `storeProcessedMemory` – helper to persist externally computed memories ([`Memori.storeProcessedMemory`](src/core/Memori.ts:655))
+  - Search:
+    - `searchMemories` ([`Memori.searchMemories`](src/core/Memori.ts:371))
+    - `searchMemoriesWithStrategy` ([`Memori.searchMemoriesWithStrategy`](src/core/Memori.ts:385))
+    - `searchRecentMemories` ([`Memori.searchRecentMemories`](src/core/Memori.ts:443))
+    - `getAvailableSearchStrategies` ([`Memori.getAvailableSearchStrategies`](src/core/Memori.ts:435))
+  - Conscious processing:
+    - `initializeConsciousContext`, `checkForConsciousContextUpdates` ([`Memori.initializeConsciousContext`](src/core/Memori.ts:534), [`Memori.checkForConsciousContextUpdates`](src/core/Memori.ts:514))
+    - Background monitoring controls: `setBackgroundUpdateInterval`, `isBackgroundMonitoringActive` ([`Memori.setBackgroundUpdateInterval`](src/core/Memori.ts:617), [`Memori.isBackgroundMonitoringActive`](src/core/Memori.ts:641))
+  - Index maintenance:
+    - `getIndexHealthReport`, `optimizeIndex`, `createIndexBackup`, `restoreIndexFromBackup` ([`Memori`](src/core/Memori.ts:794), [`Memori.optimizeIndex`](src/core/Memori.ts:824), [`Memori.createIndexBackup`](src/core/Memori.ts:856), [`Memori.restoreIndexFromBackup`](src/core/Memori.ts:1112))
+  - Stats:
+    - `getMemoryStatistics`, `getDetailedMemoryStatistics` ([`Memori.getMemoryStatistics`](src/core/Memori.ts:886), [`Memori.getDetailedMemoryStatistics`](src/core/Memori.ts:927))
+  - Duplicates & relationships:
+    - `findDuplicateMemories` ([`Memori.findDuplicateMemories`](src/core/Memori.ts:735))
+    - `extractMemoryRelationships`, `buildRelationshipGraph` ([`Memori.extractMemoryRelationships`](src/core/Memori.ts:983), [`Memori.buildRelationshipGraph`](src/core/Memori.ts:1050))
+  - Lifecycle:
+    - `close` – shuts down background tasks, search service, and database ([`Memori.close`](src/core/Memori.ts:467))
 - Instantiates `DatabaseManager`, provider adapters, `MemoryAgent`, and optionally `ConsciousAgent`.
 
 ### Providers
 
 - Location: `src/core/infrastructure/providers/`
-- `OpenAIProvider`, `AnthropicProvider`, `OllamaProvider` all extend `MemoryCapableProvider`.
-- `LLMProviderFactory` converts `ProviderType` + config into the correct provider instance.
-- Providers share connection pooling, request caching, and health monitoring utilities.
+- `OpenAIProvider`, `AnthropicProvider`, `OllamaProvider` extend shared base provider infrastructure (e.g. `MemoryCapableProvider` / `BaseLLMProvider`).
+- `LLMProviderFactory` maps `ProviderType` + config to concrete provider classes.
+- Documented guarantees:
+  - Consistent config surface and logging.
+  - Memory features integrated via `MemoryCapableProvider` when enabled.
+- Do not assume undocumented features like global caching or pooling beyond what is implemented in each provider.
 
 ### Database Infrastructure
 
 - `DatabaseContext` owns Prisma clients and operation metrics.
-- `MemoryManager`, `SearchManager`, and supporting managers inherit from `BaseDatabaseService` to share sanitisation and metrics recording.
-- Search coordination combines FTS5 queries with fallback strategies; see `SearchManager.searchMemories`.
+- `MemoryManager`, `SearchManager`, and other managers are composed by `DatabaseManager` as a facade; refer to concrete types rather than assuming a specific base class.
+- Search coordination combines FTS5 queries where available with safe fallbacks; see `SearchManager.searchMemories` and `SearchService` orchestration.
 
 ### Performance Monitoring
 
-- Services under `src/core/performance/` (`PerformanceDashboardService`, `PerformanceAnalyticsService`) collect metrics from search, database operations, and configuration changes. They are optional but useful for admin dashboards.
+- `PerformanceService` (wired through `DatabaseContext` / `DatabaseManager`) tracks database operation metrics and exposes:
+  - `getPerformanceMetrics`, `getRecentOperationMetrics`, `getPerformanceAnalytics`, `getDatabasePerformanceReport`, `getPerformanceMonitoringStatus`.
+- These can be surfaced via `DatabaseManager`-backed APIs for admin tooling; avoid referencing non-existent `performance` dashboard classes.
 
 ### Integrations
 

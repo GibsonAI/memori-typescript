@@ -7,7 +7,7 @@ Welcome to the Memorits developer hub. Memorits is a TypeScript-first memory eng
 - **Agent-Friendly Memory** – `MemoriAI` captures conversations, scores importance, and stores summaries automatically.
 - **Prisma + SQLite Core** – A fully typed persistence layer with migrations managed through Prisma.
 - **Provider Abstraction** – Shared MemoryAgent pipelines for OpenAI, Anthropic, and Ollama via a unified provider factory.
-- **Search Engine** – FTS5, recency, metadata, temporal, and relationship strategies with configurable fallbacks.
+- **Search Engine** – Multi-strategy search via `SearchManager`/`SearchService`, using FTS5 where available with LIKE-based fallbacks, plus temporal and metadata filtering as implemented in the core search modules.
 - **Structured Logging** – All components log with component metadata, ready for production observability.
 - **Type-Safe APIs** – Zod-backed schemas drive runtime validation, and all public types are exported for IDE support.
 
@@ -27,7 +27,10 @@ import { MemoriAI } from 'memorits';
 const ai = new MemoriAI({
   databaseUrl: 'file:./memori.db',
   apiKey: process.env.OPENAI_API_KEY ?? 'sk-your-api-key',
-  provider: 'openai',
+  // Provider is auto-detected:
+  // - sk-ant-*           -> Anthropic
+  // - ollama-local/baseUrl -> Ollama
+  // - other sk-*         -> OpenAI (default)
   model: 'gpt-4o-mini',
   mode: 'automatic',            // automatic | manual | conscious
   namespace: 'support-bot'      // optional logical partition
@@ -40,7 +43,7 @@ const reply = await ai.chat({
 const memories = await ai.searchMemories('TypeScript', { limit: 5 });
 ```
 
-For Ollama or custom endpoints, supply `baseUrl` and the synthetic API key (`ollama-local`) that the providers expect. The `ConfigManager` also recognises environment settings such as `DATABASE_URL`, `MEMORI_NAMESPACE`, `MEMORI_AUTO_INGEST`, and `OPENAI_BASE_URL`.
+For Ollama or custom endpoints, supply `baseUrl` and use `ollama-local` as the API key. Provider type is inferred by the runtime from the `provider` field (when present) or from key patterns (see [`MemoriAI.detectProvider`](src/core/MemoriAI.ts:313) and [`Memori.detectProviderType`](src/core/Memori.ts:155)). The `ConfigManager` recognises `DATABASE_URL`, `MEMORI_NAMESPACE`, `MEMORI_AUTO_INGEST`, `MEMORI_CONSCIOUS_INGEST`, `MEMORI_ENABLE_RELATIONSHIP_EXTRACTION`, `OPENAI_API_KEY`, and `OPENAI_BASE_URL`.
 
 ## Documentation Map
 
@@ -48,7 +51,7 @@ For Ollama or custom endpoints, supply `baseUrl` and the synthetic API key (`oll
   - [Getting Started](getting-started.md) – installation, environment setup, and first request.
   - [Basic Usage](basic-usage.md) – day-to-day patterns with `MemoriAI` plus pointers to advanced workflows.
   - [Memory Management](core-concepts/memory-management.md) – automatic vs conscious ingestion aligned with `Memori`.
-  - [Search Strategies](core-concepts/search-strategies.md) – how strategies in `src/core/domain/search` are orchestrated.
+  - [Search Strategies](core-concepts/search-strategies.md) – overview of implemented search strategies and their use via stable APIs.
   - [Category Hierarchy](core-concepts/category-hierarchy.md) – hierarchical category management with `CategoryHierarchyManager` and `CategoryMetadataExtractor`.
 
 - **Architecture**
