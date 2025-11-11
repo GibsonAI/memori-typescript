@@ -28,6 +28,11 @@ Practical guidance for anyone touching the `memori-ts` codebase.
 ## Memory Pipeline Guardrails
 - `MemoriAI` is the entry point for clients; `Memori` is the advanced API. Keep feature parity consistent.
 - Memory processing flows through `MemoryAgent` and `DatabaseManager`. When modifying ingestion, ensure both short- and long-term storage still work.
+- Use the public update APIs instead of reaching into internal managers:
+  - `Memori.updateMemory(id, updates, namespace?)` for corrections/refinements.
+  - `Memori.updateMemoryRelationships(input)` for explicit graph mutations.
+  - `Memori.markAsDuplicate(duplicateId, originalId, options?)` and `Memori.setSupersedes(primaryId, supersededId, options?)` for duplicate/supersedence semantics.
+  - `Memori.applyDeltas(deltas, options?)` for curator-style batch operations.
 - Search relies on `SearchManager` + `SearchService`; FTS5 is optional. Always provide LIKE fallbacks.
 - Duplicate handling lives in `DuplicateManager` and the consolidation service. Use transactions for write operations.
 

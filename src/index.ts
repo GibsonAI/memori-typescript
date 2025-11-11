@@ -16,13 +16,24 @@ export type {
   ProviderInfo
 } from './core/MemoriAIConfig';
 
-// Keep essential existing exports for backward compatibility
+ // Keep essential existing exports for backward compatibility
 export { Memori } from './core/Memori';
 export { ConfigManager } from './core/infrastructure/config/ConfigManager';
 export type {
   MemorySearchResult as SearchResult,
   MemoriConfig
 } from './core/types/models';
+
+// Public memory operation types
+export type {
+  UpdateMemoryInput,
+  UpdateMemoryRelationshipsInput,
+  UpdateMemoryRelationshipsResult,
+  DeltaInput,
+  ApplyDeltasResult,
+  ApplyDeltasOptions,
+  RelationshipType,
+} from './core/types/memory-operations';
 
 // Essential search types that other modules depend on
 export type { SearchQuery } from './core/domain/search/SearchStrategy';

@@ -16,6 +16,14 @@ import {
 } from './types/models';
 import { ProcessedLongTermMemory, MemoryClassification, MemoryImportanceLevel, MemoryRelationship } from './types/schemas';
 import { SearchStrategy, SearchQuery } from './domain/search/types';
+import {
+  UpdateMemoryInput,
+  UpdateMemoryRelationshipsInput,
+  UpdateMemoryRelationshipsResult,
+  DeltaInput,
+  ApplyDeltasResult,
+  ApplyDeltasOptions,
+} from './types/memory-operations';
 
 
 export class Memori {
@@ -501,6 +509,270 @@ export class Memori {
 
   getDatabaseManager(): DatabaseManager {
     return this.dbManager;
+  }
+
+  // ===== Public Memory Update & Relationship APIs =====
+
+  /**
+   * Public helper to update an existing long-term memory by ID.
+   *
+   * This method:
+   * - Delegates to DatabaseManager.updateMemory
+   * - Does not expose internal schema or manager APIs
+   * - Uses UpdateMemoryInput for a stable, typed contract
+   */
+  async updateMemory(
+    id: string,
+    updates: UpdateMemoryInput,
+    namespace?: string,
+  ): Promise<boolean> {
+    if (!this.enabled) {
+      throw new Error('Memori is not enabled');
+    }
+
+    const effectiveNamespace = namespace || this.config.namespace || 'default';
+
+    return this.dbManager.updateMemory(id, {
+      content: updates.content,
+      title: updates.title,
+      tags: updates.tags,
+      importance: updates.importance,
+      metadata: updates.metadata,
+      expectedVersion: updates.expectedVersion,
+      ifUnmodifiedSince: updates.ifUnmodifiedSince,
+      namespace: effectiveNamespace,
+    });
+  }
+
+  /**
+   * Public helper to update relationships for a memory.
+   *
+   * This wraps the DatabaseManager relationship facade with a stable
+   * UpdateMemoryRelationshipsInput / Result contract.
+   */
+  async updateMemoryRelationships(
+    input: UpdateMemoryRelationshipsInput,
+  ): Promise<UpdateMemoryRelationshipsResult> {
+    if (!this.enabled) {
+      throw new Error('Memori is not enabled');
+    }
+
+    const namespace = input.namespace || this.config.namespace || 'default';
+
+    const result = await this.dbManager.updateMemoryRelationshipsFacade({
+      sourceId: input.sourceId,
+      namespace,
+      relations: input.relations.map(rel => ({
+        targetId: rel.targetId,
+        type: rel.type,
+        strength: rel.strength,
+        metadata: rel.metadata,
+        direction: rel.direction,
+      })),
+    });
+
+    return {
+      updated: result.updated,
+      errors: result.errors,
+    };
+  }
+
+  /**
+   * Mark one memory as a duplicate of another.
+   *
+   * This is a stable public helper that delegates to DatabaseManager.
+   */
+  async markAsDuplicate(
+    duplicateId: string,
+    originalId: string,
+    options?: { namespace?: string },
+  ): Promise<boolean> {
+    if (!this.enabled) {
+      throw new Error('Memori is not enabled');
+    }
+
+    const namespace = options?.namespace || this.config.namespace || 'default';
+    return this.dbManager.markAsDuplicateFacade(duplicateId, originalId, namespace);
+  }
+
+  /**
+   * Declare that primaryId supersedes supersededId.
+   *
+   * This is exposed as a stable helper for curator-style pipelines.
+   */
+  async setSupersedes(
+    primaryId: string,
+    supersededId: string,
+    options?: { namespace?: string },
+  ): Promise<boolean> {
+    if (!this.enabled) {
+      throw new Error('Memori is not enabled');
+    }
+
+    const namespace = options?.namespace || this.config.namespace || 'default';
+    return this.dbManager.setSupersedesFacade(primaryId, supersededId, namespace);
+  }
+
+  /**
+   * Apply a batch of deltas using stable public APIs:
+   * - "note"/"playbook_entry"      -> recordConversation (create)
+   * - "correction"/"refinement"    -> updateMemory
+   * - "relationship"               -> updateMemoryRelationships
+   *
+   * This helper is intentionally minimal and conservative:
+   * - Uses continueOnError (default true) to support robust curator pipelines.
+   * - Never exposes internal schema/manager details.
+   */
+  async applyDeltas(
+    deltas: DeltaInput[],
+    options?: ApplyDeltasOptions,
+  ): Promise<ApplyDeltasResult> {
+    if (!this.enabled) {
+      throw new Error('Memori is not enabled');
+    }
+
+    const continueOnError = options?.continueOnError !== false;
+    const defaultNamespace = options?.defaultNamespace || this.config.namespace || 'default';
+    const maxBatchSize = options?.maxBatchSize && options.maxBatchSize > 0
+      ? options.maxBatchSize
+      : undefined;
+
+    const applied: string[] = [];
+    const failed: ApplyDeltasResult['failed'] = [];
+
+    const processBatch = async (batch: DeltaInput[]) => {
+      for (const delta of batch) {
+        const ns = delta.namespace || defaultNamespace;
+
+        try {
+          switch (delta.type) {
+          case 'note':
+          case 'playbook_entry': {
+            const content = delta.content || '';
+            // Use recordConversation as the supported creation path
+            const chatId = await this.recordConversation(content, '', {
+              metadata: {
+                ...delta.metadata,
+                tags: delta.tags,
+                deltaType: delta.type,
+              },
+            });
+            applied.push(chatId);
+            break;
+          }
+
+          case 'correction':
+          case 'refinement': {
+            if (!delta.targetId) {
+              throw new Error(`Delta of type '${delta.type}' requires targetId`);
+            }
+
+            const ok = await this.updateMemory(delta.targetId, {
+              content: delta.content,
+              tags: delta.tags,
+              metadata: delta.metadata,
+            }, ns);
+
+            if (!ok) {
+              throw new Error('UpdateMemoryInput not applied (concurrency/namespace/exists check failed)');
+            }
+
+            applied.push(delta.targetId);
+            break;
+          }
+
+          case 'relationship': {
+            // Support both top-level targetId/source/relationship payload
+            const sourceId = delta.relationship?.sourceId || delta.targetId;
+            if (!sourceId || !delta.relationship?.targetId || !delta.relationship?.type) {
+              throw new Error('Relationship delta requires relationship.sourceId/targetId/type');
+            }
+
+            const relInput: UpdateMemoryRelationshipsInput = {
+              sourceId,
+              namespace: ns,
+              relations: [
+                {
+                  targetId: delta.relationship.targetId,
+                  type: String(delta.relationship.type),
+                  strength: delta.relationship.strength,
+                  metadata: delta.relationship.metadata ?? delta.metadata,
+                },
+              ],
+            };
+
+            const result = await this.updateMemoryRelationships(relInput);
+            if (result.errors.length > 0 || result.updated === 0) {
+              throw new Error(result.errors.join('; ') || 'No relationships updated');
+            }
+
+            applied.push(`${sourceId}->${delta.relationship.targetId}`);
+            break;
+          }
+
+          default: {
+            // For unknown types, treat as a generic note to maintain forward compatibility
+            const content = delta.content || '';
+            const chatId = await this.recordConversation(content, '', {
+              metadata: {
+                ...delta.metadata,
+                tags: delta.tags,
+                deltaType: delta.type,
+              },
+            });
+            applied.push(chatId);
+          }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          failed.push({ delta, error: message });
+
+          logError('Memori.applyDeltas: delta application failed', {
+            component: 'Memori',
+            deltaType: delta.type,
+            targetId: delta.targetId,
+            namespace: ns,
+            error: message,
+          });
+
+          if (!continueOnError) {
+            // Abort processing and return immediately
+            return false;
+          }
+        }
+      }
+
+      return true;
+    };
+
+    const batches: DeltaInput[][] = [];
+    if (maxBatchSize) {
+      for (let i = 0; i < deltas.length; i += maxBatchSize) {
+        batches.push(deltas.slice(i, i + maxBatchSize));
+      }
+    } else {
+      batches.push(deltas);
+    }
+
+    for (const batch of batches) {
+      const ok = await processBatch(batch);
+      if (!ok) break;
+    }
+
+    return {
+      applied,
+      failed,
+      summary: {
+        total: deltas.length,
+        applied: applied.length,
+        failed: failed.length,
+        errorTypes: failed.reduce<Record<string, number>>((acc, f) => {
+          const key = f.error || 'unknown';
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {}),
+      },
+    };
   }
 
   isEnabled(): boolean {

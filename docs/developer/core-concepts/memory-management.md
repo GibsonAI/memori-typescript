@@ -123,6 +123,135 @@ if (duplicates.length > 0) {
 }
 ```
 
+## Public Memory Update & Relationship APIs
+
+Memorits exposes stable, additive APIs for precise memory corrections, relationship management, and curator-style delta application without reaching into internal managers.
+
+### Updating Existing Memories
+
+Use `Memori.updateMemory` to apply controlled updates to an existing long-term memory:
+
+```typescript
+import { Memori, type UpdateMemoryInput } from 'memorits';
+
+const memori = new Memori({
+  databaseUrl: 'file:./memori.db',
+  namespace: 'my-app'
+});
+await memori.enable();
+
+const ok = await memori.updateMemory('memory-id', <UpdateMemoryInput>{
+  content: 'Corrected content for this memory',
+  tags: ['curated', 'reviewed'],
+  metadata: {
+    curator: 'analyst-123',
+    reason: 'factual correction'
+  }
+});
+
+if (!ok) {
+  // Not found, namespace mismatch, or concurrency/validation condition not met
+}
+```
+
+Key points:
+
+- Only documented fields are updatable (`content`, `title`, `tags`, `importance`, `metadata`).
+- Implementation handles validation and persistence internally.
+- Callers never depend on Prisma models or table/column names.
+
+### Managing Relationships
+
+To declare or refine explicit relationships between memories, use `Memori.updateMemoryRelationships`:
+
+```typescript
+import {
+  Memori,
+  type UpdateMemoryRelationshipsInput
+} from 'memorits';
+
+const input: UpdateMemoryRelationshipsInput = {
+  sourceId: 'policy-memory-id',
+  namespace: 'my-app',
+  relations: [
+    {
+      targetId: 'runbook-memory-id',
+      type: 'references',
+      strength: 0.9,
+      metadata: { source: 'curator' }
+    }
+  ]
+};
+
+const result = await memori.updateMemoryRelationships(input);
+
+if (result.errors.length) {
+  console.error('Relationship update issues:', result.errors);
+}
+```
+
+Helpers for duplicate and supersedence semantics:
+
+```typescript
+// Mark one memory as a duplicate of another
+await memori.markAsDuplicate('duplicate-id', 'original-id', { namespace: 'my-app' });
+
+// Declare that one memory supersedes another
+await memori.setSupersedes('primary-id', 'superseded-id', { namespace: 'my-app' });
+```
+
+These functions are thin public wrappers; they keep relationship semantics stable while allowing internal implementations to evolve.
+
+### Delta Application for Curator Pipelines
+
+For systems that compute batches of corrections, refinements, and relationships, use `Memori.applyDeltas`:
+
+```typescript
+import { Memori, type DeltaInput } from 'memorits';
+
+const deltas: DeltaInput[] = [
+  {
+    type: 'note',
+    content: 'SRE runbook updated for incident classification.',
+    tags: ['sre', 'runbook']
+  },
+  {
+    type: 'correction',
+    targetId: 'memory-123',
+    content: 'Updated recovery time objective (RTO) is 30 minutes.',
+    metadata: { source: 'architecture-review' }
+  },
+  {
+    type: 'relationship',
+    relationship: {
+      sourceId: 'policy-memory-id',
+      targetId: 'runbook-memory-id',
+      type: 'references',
+      strength: 0.8
+    }
+  }
+];
+
+const result = await memori.applyDeltas(deltas, {
+  continueOnError: true,
+  defaultNamespace: 'my-app'
+});
+
+console.log('Applied deltas:', result.applied);
+if (result.failed.length) {
+  console.warn('Failed deltas:', result.failed);
+}
+```
+
+Behavior:
+
+- Routes to:
+  - `recordConversation` for note-like deltas,
+  - `updateMemory` for corrections/refinements,
+  - `updateMemoryRelationships` for relationship entries.
+- Returns both `applied` IDs and detailed `failed` entries for auditability.
+- Designed for stable external integrations.
+
 ## Operational Tips
 
 - Keep `namespace` consistent per tenant to isolate memories.
@@ -130,4 +259,4 @@ if (duplicates.length > 0) {
 - Monitor `memori.getMemoryStatistics()` to keep an eye on short-term vs long-term counts.
 - After schema changes run `npm run prisma:push && npm run prisma:generate` before restarting your service.
 
-Understanding these mechanics provides the foundation for more advanced topics such as temporal search, relationship traversal, and consolidation, all of which build directly on this ingestion pipeline.
+Understanding these mechanics and the public update APIs provides the foundation for advanced features such as temporal search, relationship traversal, consolidation, and curator pipelines built on top of Memorits.
