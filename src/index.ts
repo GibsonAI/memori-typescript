@@ -11,8 +11,6 @@ export type {
   ChatResponse,
   SearchOptions,
   MemorySearchResult,
-  EmbeddingParams,
-  EmbeddingResponse,
   ProviderInfo
 } from './core/MemoriAIConfig';
 
@@ -53,6 +51,18 @@ export {
   OpenAIProvider,
   AnthropicProvider,
   OllamaProvider,
+} from './core/infrastructure/providers';
+
+// Core provider interfaces and types for downstream integrations
+export type {
+  ILLMProvider,
+  ProviderInitializationOptions,
+  ProviderMemoryContext,
+  ChatCompletionParams,
+  ChatMessage,
+  ChatCompletionResponse,
+  EmbeddingParams,
+  EmbeddingResponse,
 } from './core/infrastructure/providers';
 
 // Performance monitoring services
