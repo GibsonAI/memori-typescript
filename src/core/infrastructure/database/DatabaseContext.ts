@@ -370,11 +370,7 @@ export class DatabaseContext {
      });
 
      try {
-       // Stop health monitoring first
-       if (this.healthCheckInterval) {
-         clearInterval(this.healthCheckInterval);
-         this.healthCheckInterval = undefined;
-       }
+      this.stopHealthMonitoring();
 
        // Cleanup managers in reverse order, but skip FTS-related cleanup if still initializing
        const managerNames = Array.from(this.managers.keys());

@@ -248,7 +248,20 @@ console.log(`Saved ${optimization.spaceSaved} bytes`);
   ### Memory Relationships & Analysis
 
   ```typescript
-  // Extract relationships from content
+  import {
+    Memori,
+    type UpdateMemoryInput,
+    type UpdateMemoryRelationshipsInput,
+    type DeltaInput
+  } from 'memorits';
+
+  const memori = new Memori({
+    databaseUrl: 'file:./memori.db',
+    namespace: 'my-app'
+  });
+  await memori.enable();
+
+  // Extract relationships from content (LLM + rule-based, implementation detail)
   const relationships = await memori.extractMemoryRelationships(
     'This is a follow-up to our previous discussion about the authentication system',
     { minConfidence: 0.7 }
@@ -267,6 +280,107 @@ console.log(`Saved ${optimization.spaceSaved} bytes`);
   console.log(`Found ${graph.nodes.length} connected memories`);
   console.log(`Found ${graph.edges.length} relationships`);
   console.log(`Identified ${graph.clusters.length} memory clusters`);
+  ```
+
+  ### Precise Memory Updates
+
+  Use `Memori.updateMemory` when you need to correct or refine an existing memory without re-ingesting via `recordConversation`:
+
+  ```typescript
+  const ok = await memori.updateMemory('memory-id', <UpdateMemoryInput>{
+    content: 'Updated, corrected content',
+    tags: ['corrected', 'curated'],
+    metadata: {
+      curator: 'human-review',
+      reason: 'typo fix'
+    }
+  });
+
+  if (!ok) {
+    console.warn('Memory update was not applied (not found, namespace mismatch, or concurrency conditions).');
+  }
+  ```
+
+  This API:
+  - Is additive and public.
+  - Hides internal tables/columns.
+  - Returns a boolean result for safe, auditable pipelines.
+
+  ### Relationship Management Helpers
+
+  Use `Memori.updateMemoryRelationships` for explicit graph updates:
+
+  ```typescript
+  const relInput: UpdateMemoryRelationshipsInput = {
+    sourceId: 'primary-memory-id',
+    namespace: 'my-app',
+    relations: [
+      {
+        targetId: 'related-memory-id',
+        type: 'references',
+        strength: 0.9,
+        metadata: { source: 'curator' }
+      }
+    ]
+  };
+
+  const relResult = await memori.updateMemoryRelationships(relInput);
+
+  if (relResult.errors.length) {
+    console.error('Failed to update relationships:', relResult.errors);
+  }
+  ```
+
+  Helpers for duplicate and supersedence semantics:
+
+  ```typescript
+  // Mark a memory as a duplicate of another
+  await memori.markAsDuplicate('duplicate-id', 'original-id', { namespace: 'my-app' });
+
+  // Declare that one memory supersedes another
+  await memori.setSupersedes('primary-id', 'superseded-id', { namespace: 'my-app' });
+  ```
+
+  These are thin, public wrappers over the internal consolidation/relationship machinery.
+
+  ### Delta Application for Curator Pipelines
+
+  For batch-style curator or reflector flows, use `Memori.applyDeltas` as a stable entrypoint:
+
+  ```typescript
+  const deltas: DeltaInput[] = [
+    {
+      type: 'note',
+      content: 'New SOP: incidents must be acknowledged within 5 minutes.',
+      tags: ['sop', 'incident-management'],
+      metadata: { source: 'policy-doc' }
+    },
+    {
+      type: 'correction',
+      targetId: 'existing-memory-id',
+      content: 'Updated on-call rotation schedule.',
+      metadata: { source: 'scheduler', severity: 'high' }
+    },
+    {
+      type: 'relationship',
+      relationship: {
+        sourceId: 'policy-memory-id',
+        targetId: 'runbook-memory-id',
+        type: 'references',
+        strength: 0.8
+      }
+    }
+  ];
+
+  const result = await memori.applyDeltas(deltas, {
+    continueOnError: true,
+    defaultNamespace: 'my-app'
+  });
+
+  console.log('Applied:', result.applied);
+  if (result.failed.length) {
+    console.warn('Some deltas failed:', result.failed);
+  }
   ```
 
   ### Advanced Search Operations
