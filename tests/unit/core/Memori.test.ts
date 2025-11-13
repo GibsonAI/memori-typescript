@@ -28,6 +28,7 @@ const MockConnectionPool = require('../../../src/core/infrastructure/providers/p
 const mockLoadConfig = jest.fn();
 (ConfigManager.loadConfig as jest.Mock) = mockLoadConfig;
 
+
 describe('Memori', () => {
   let memori: Memori;
   let mockConfig: any;

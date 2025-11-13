@@ -90,6 +90,7 @@ IMPORTANCE CRITERIA:
 export class MemoryAgent {
   private llmProvider: ILLMProvider;
   private dbManager?: DatabaseManager;
+  // RelationshipProcessor is intentionally internal; accessed indirectly via Memori APIs
   private relationshipProcessor?: RelationshipProcessor;
 
   constructor(openaiProvider: ILLMProvider, dbManager?: DatabaseManager) {
@@ -99,9 +100,9 @@ export class MemoryAgent {
     this.dbManager = dbManager;
 
     // Initialize relationship processor if database manager is available
-    // Use the same analysis provider to avoid recursion during relationship extraction
+    // Use the same analysis provider (ILLMProvider) to avoid recursion during relationship extraction
     if (dbManager && this.llmProvider) {
-      this.relationshipProcessor = new RelationshipProcessor(dbManager, this.llmProvider as any);
+      this.relationshipProcessor = new RelationshipProcessor(dbManager, this.llmProvider);
     }
   }
 

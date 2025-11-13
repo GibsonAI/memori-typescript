@@ -21,7 +21,7 @@
 import { MemoryRelationship, MemoryRelationshipType } from '../../../types/schemas';
 import { DatabaseManager } from '../../../infrastructure/database/DatabaseManager';
 import { RelationshipSearchStrategy } from '../strategies/RelationshipSearchStrategy';
-import { OpenAIProvider } from '../../../infrastructure/providers/OpenAIProvider';
+import { ILLMProvider } from '../../../infrastructure/providers/ILLMProvider';
 // Types defined inline for relationship processing
 interface RelationshipExtractionResult {
   relationships: any[];
@@ -65,7 +65,7 @@ import { logInfo, logError } from '../../../infrastructure/config/Logger';
 
 export class RelationshipProcessor {
   private databaseManager: DatabaseManager;
-  private openaiProvider: OpenAIProvider;
+  private llmProvider: ILLMProvider;
   private relationshipSearchStrategy: RelationshipSearchStrategy;
 
   // Configuration for relationship processing optimization
@@ -88,7 +88,7 @@ export class RelationshipProcessor {
 
   constructor(
     databaseManager: DatabaseManager,
-    openaiProvider: OpenAIProvider,
+    llmProvider: ILLMProvider,
     options?: {
       defaultAnalysisDepth?: number;
       maxAnalysisDepth?: number;
@@ -100,7 +100,7 @@ export class RelationshipProcessor {
     }
   ) {
     this.databaseManager = databaseManager;
-    this.openaiProvider = openaiProvider;
+    this.llmProvider = llmProvider;
     this.relationshipSearchStrategy = new RelationshipSearchStrategy(
       RelationshipSearchStrategy.createDefaultConfig(),
       databaseManager
@@ -146,26 +146,28 @@ export class RelationshipProcessor {
         contextSessionId: context.sessionId,
       });
 
-      // Use OpenAI provider for relationship analysis
+      // Use provider-agnostic LLM for relationship analysis
       const systemPrompt = this.buildRelationshipAnalysisPrompt();
       const userPrompt = this.buildRelationshipAnalysisUserPrompt(content, context, existingMemories);
 
-      // Get OpenAI provider for relationship analysis
-      const openaiClient = this.openaiProvider.getClient();
+      if (!this.llmProvider || typeof (this.llmProvider as any).createChatCompletion !== 'function') {
+        throw new Error('RelationshipProcessor: LLM provider does not support chat completion');
+      }
 
-      const response = await openaiClient.chat.completions.create({
-        model: this.openaiProvider.getModel(),
+      const response = await this.llmProvider.createChatCompletion({
+        // Prefer provider's default model if not explicitly exposed
+        model: (this.llmProvider as any).getModel ? (this.llmProvider as any).getModel() : undefined,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: 0.1, // Low temperature for consistent analysis
+        temperature: 0.1,
         max_tokens: 1500,
       });
 
-      const llmResponse = response.choices[0]?.message?.content;
+      const llmResponse = response.message?.content;
       if (!llmResponse) {
-        throw new Error('No response from OpenAI for relationship analysis');
+        throw new Error('No response from provider for relationship analysis');
       }
 
       // Parse and validate LLM response
@@ -182,8 +184,8 @@ export class RelationshipProcessor {
         confidence: this.calculateOverallConfidence(validatedRelationships),
         extractedAt: new Date(),
         processingMetadata: {
-          llmModel: this.openaiProvider.getModel(),
-          llmTokensUsed: response.usage?.total_tokens || 0,
+          llmModel: (this.llmProvider as any).getModel ? (this.llmProvider as any).getModel() : undefined,
+          llmTokensUsed: (response as any).usage?.total_tokens || 0,
           analysisDepth: context.analysisDepth || this.config.defaultAnalysisDepth,
           relatedMemoriesAnalyzed: existingMemories.length,
           processingTime: Date.now() - (this.operationStartTime || Date.now()),
@@ -211,12 +213,16 @@ export class RelationshipProcessor {
       });
 
       // Return empty result with error information
+      const message = error instanceof Error ? error.message : String(error);
+
       return {
         relationships: [],
-        extractionMethod: 'llm_analysis_failed',
+        extractionMethod: message.includes('does not support chat completion')
+          ? 'llm_unsupported'
+          : 'llm_analysis_failed',
         confidence: 0,
         extractedAt: new Date(),
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
         processingMetadata: {
           analysisDepth: context.analysisDepth || this.config.defaultAnalysisDepth,
           relatedMemoriesAnalyzed: existingMemories.length,
