@@ -3,10 +3,23 @@ import * as winston from 'winston';
 // Define log levels
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
-// Sensitive fields that should be redacted in logs
+ // Sensitive fields that should be redacted in logs.
+ // Note:
+ // - We intentionally keep generic terms like "key" out of this list to avoid
+ //   over-redacting non-secret identifiers such as cache keys.
+ // - Actual secret detection for values is handled by redactString via:
+ //   - explicit prefixes (sk-, pk-, Bearer, etc.)
+ //   - very long high-entropy tokens.
 export const SENSITIVE_FIELDS = Object.freeze([
-  'apiKey', 'password', 'token', 'secret', 'auth', 'credential',
-  'accessToken', 'refreshToken', 'key', 'authorization', 
+  'apiKey',
+  'password',
+  'token',
+  'secret',
+  'auth',
+  'credential',
+  'accessToken',
+  'refreshToken',
+  'authorization',
 ]);
 
 // Redaction utility functions

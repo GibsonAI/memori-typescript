@@ -152,19 +152,34 @@ async function run(): Promise<void> {
   const prismaCli = await requirePrismaCli();
 
   const prismaArgs = [prismaCli, 'db', 'push', '--schema', schemaPath];
-  const databaseUrl = parsed.options.url ?? process.env.DATABASE_URL ?? process.env.MEMORI_DATABASE_URL;
-  
+
+  // For deterministic behavior, require an explicit database URL.
+  // Prefer the CLI flag; fall back to env only if explicitly set.
+  const databaseUrl =
+    parsed.options.url ??
+    process.env.DATABASE_URL ??
+    process.env.MEMORI_DATABASE_URL;
+
+  if (!databaseUrl) {
+    console.error(
+      [
+        'memorits init-db: missing database URL.',
+        '',
+        'You must specify the target database explicitly:',
+        '  - Use:  memorits init-db --url file:./memori.db',
+        '  - Or set one of: DATABASE_URL, MEMORI_DATABASE_URL',
+        '',
+        'Implicit fallbacks are disabled to avoid mismatched CLIs and runtimes.',
+      ].join('\n'),
+    );
+    process.exit(1);
+    return;
+  }
+
   const childEnv = {
     ...process.env,
+    DATABASE_URL: databaseUrl,
   };
-  
-  if (databaseUrl) {
-    childEnv.DATABASE_URL = databaseUrl;
-  } else {
-    console.warn(
-      'No database URL provided. Pass --url file:./memori.db or set DATABASE_URL / MEMORI_DATABASE_URL.',
-    );
-  }
 
   const child = spawn(process.execPath, prismaArgs, {
     stdio: 'inherit',
