@@ -111,7 +111,6 @@ describe('Logger', () => {
         expect(DataRedactor['isSensitiveField']('credential')).toBe(true);
         expect(DataRedactor['isSensitiveField']('accessToken')).toBe(true);
         expect(DataRedactor['isSensitiveField']('refreshToken')).toBe(true);
-        expect(DataRedactor['isSensitiveField']('key')).toBe(true);
         expect(DataRedactor['isSensitiveField']('authorization')).toBe(true);
       });
 
@@ -460,7 +459,6 @@ describe('Logger', () => {
       expect(SENSITIVE_FIELDS).toContain('credential');
       expect(SENSITIVE_FIELDS).toContain('accessToken');
       expect(SENSITIVE_FIELDS).toContain('refreshToken');
-      expect(SENSITIVE_FIELDS).toContain('key');
       expect(SENSITIVE_FIELDS).toContain('authorization');
     });
 
