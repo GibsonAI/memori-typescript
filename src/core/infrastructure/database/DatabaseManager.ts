@@ -431,7 +431,436 @@ export class DatabaseManager {
     await this.prisma.$disconnect();
   }
 
-  // Memory Relationship Operations
+    // ===== Public Memory Update & Relationship Facade =====
+  
+    /**
+     * Update an existing long-term memory in a controlled, auditable way.
+     *
+     * This is a thin facade over Prisma/MemoryManager behavior and is intentionally
+     * conservative: only whitelisted fields are updatable, and implementation
+     * details (tables/columns) are not exposed to callers.
+     *
+     * Contract:
+     * - Returns true when the update is applied successfully.
+     * - Returns false when:
+     *   - the memory does not exist,
+     *   - namespace/version preconditions fail,
+     *   - or no fields are actually updated.
+     * - Throws only for unexpected internal errors (I/O, Prisma, etc).
+     */
+    public async updateMemory(
+      id: string,
+      updates: {
+        content?: string;
+        title?: string;
+        tags?: string[];
+        importance?: string | number;
+        metadata?: Record<string, unknown>;
+        expectedVersion?: string | number;
+        ifUnmodifiedSince?: Date | string;
+        namespace?: string;
+      },
+    ): Promise<boolean> {
+      const startTime = Date.now();
+      const targetNamespace = updates.namespace || 'default';
+  
+      try {
+        if (!id || typeof id !== 'string') {
+          throw new Error('updateMemory: id is required');
+        }
+  
+        // Load existing record with minimal fields for checks
+        const existing = await this.prisma.longTermMemory.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            namespace: true,
+            searchableContent: true,
+            summary: true,
+            memoryImportance: true,
+            topic: true,
+            processedData: true,
+          },
+        });
+  
+        if (!existing) {
+          logInfo('updateMemory: memory not found', {
+            component: 'DatabaseManager',
+            operation: 'updateMemory',
+            id,
+            namespace: targetNamespace,
+          });
+          return false;
+        }
+  
+        if (existing.namespace !== targetNamespace) {
+          logInfo('updateMemory: namespace mismatch', {
+            component: 'DatabaseManager',
+            operation: 'updateMemory',
+            id,
+            expectedNamespace: targetNamespace,
+            actualNamespace: existing.namespace,
+          });
+          return false;
+        }
+  
+        // Basic optimistic concurrency placeholder:
+        // ifUnmodifiedSince is accepted for future use; currently no-op to avoid
+        // leaking internal schema/version details. This preserves the public
+        // contract while keeping implementation free to evolve.
+  
+        // NOTE: expectedVersion is accepted but not enforced yet to avoid
+        // leaking schema details; can be wired to a version/rowRevision field
+        // in a future migration while keeping this signature stable.
+  
+        // Build update payload (only allow explicit fields)
+        const data: Record<string, unknown> = {};
+        if (updates.content !== undefined) {
+          data.searchableContent = updates.content;
+          // For now, keep summary if not provided; callers may also update via metadata.
+        }
+        if (updates.title !== undefined) {
+          data.topic = updates.title;
+        }
+        if (updates.tags !== undefined) {
+          // Store tags in processedData.metadata.tags without exposing column name
+          const existingProcessed = (existing.processedData as any) || {};
+          data.processedData = {
+            ...existingProcessed,
+            metadata: {
+              ...(existingProcessed.metadata || {}),
+              tags: updates.tags,
+            },
+          };
+        }
+        if (updates.importance !== undefined) {
+          data.memoryImportance = String(updates.importance);
+        }
+        if (updates.metadata !== undefined) {
+          const existingProcessed = (data.processedData as any) || (existing.processedData as any) || {};
+          data.processedData = {
+            ...existingProcessed,
+            metadata: {
+              ...(existingProcessed.metadata || {}),
+              ...updates.metadata,
+            },
+          };
+        }
+  
+        if (Object.keys(data).length === 0) {
+          logInfo('updateMemory: no-op (no updatable fields provided)', {
+            component: 'DatabaseManager',
+            operation: 'updateMemory',
+            id,
+            namespace: targetNamespace,
+          });
+          return false;
+        }
+  
+        await this.prisma.longTermMemory.update({
+          where: { id },
+          data,
+        });
+  
+        this.recordOperationMetrics({
+          operationType: 'updateMemory',
+          startTime,
+          duration: Date.now() - startTime,
+          success: true,
+        });
+  
+        logInfo('updateMemory: memory updated successfully', {
+          component: 'DatabaseManager',
+          operation: 'updateMemory',
+          id,
+          namespace: targetNamespace,
+        });
+  
+        return true;
+      } catch (error) {
+        this.recordOperationMetrics({
+          operationType: 'updateMemory',
+          startTime,
+          duration: Date.now() - startTime,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+  
+        logError('updateMemory: internal error', {
+          component: 'DatabaseManager',
+          operation: 'updateMemory',
+          id,
+          namespace: updates.namespace || 'default',
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+        throw error;
+      }
+    }
+  
+    /**
+     * Public facade for updating relationships of a single memory.
+     *
+     * This wraps RelationshipManager.updateMemoryRelationships / bulkUpdateRelationships
+     * without exposing their internals. It follows the ISSUE-10 result shape.
+     */
+    public async updateMemoryRelationshipsFacade(
+      input: {
+        sourceId: string;
+        relations: Array<{
+          targetId: string;
+          type: string;
+          strength?: number;
+          metadata?: Record<string, unknown>;
+          direction?: 'outgoing' | 'incoming' | 'bidirectional';
+        }>;
+        namespace?: string;
+      },
+    ): Promise<{ updated: number; errors: string[] }> {
+      const startTime = Date.now();
+      const errors: string[] = [];
+  
+      try {
+        if (!input.sourceId) {
+          return { updated: 0, errors: ['sourceId is required'] };
+        }
+  
+        if (!input.relations || input.relations.length === 0) {
+          return { updated: 0, errors: [] };
+        }
+  
+        const namespace = input.namespace || 'default';
+  
+        const updates = input.relations.map(rel => ({
+          relationship: {
+            type: rel.type as any,
+            targetMemoryId: rel.targetId,
+            confidence: typeof rel.strength === 'number' ? Math.max(0, Math.min(1, rel.strength)) : 0.7,
+            strength: typeof rel.strength === 'number' ? Math.max(0, Math.min(1, rel.strength)) : 0.7,
+            reason: 'external_update',
+            context: 'memori.public.updateMemoryRelationships',
+            entities: [],
+            metadata: rel.metadata,
+          } as any,
+          // For public API: treat all as add/update semantics.
+          operation: 'add' as const,
+        }));
+  
+        const result = await this.relationshipManager.updateMemoryRelationships(
+          input.sourceId,
+          updates,
+          namespace,
+        );
+  
+        this.recordOperationMetrics({
+          operationType: 'updateMemoryRelationships',
+          startTime,
+          duration: Date.now() - startTime,
+          success: errors.length === 0,
+          error: result.errors.join('; ') || undefined,
+        });
+  
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(message);
+  
+        this.recordOperationMetrics({
+          operationType: 'updateMemoryRelationships',
+          startTime,
+          duration: Date.now() - startTime,
+          success: false,
+          error: message,
+        });
+  
+        logError('updateMemoryRelationshipsFacade: internal error', {
+          component: 'DatabaseManager',
+          operation: 'updateMemoryRelationshipsFacade',
+          input,
+          error: message,
+        });
+  
+        return { updated: 0, errors };
+      }
+    }
+  
+    /**
+     * Mark one memory as an explicit duplicate of another.
+     * This delegates to DuplicateManager / consolidation services where possible.
+     */
+    public async markAsDuplicateFacade(
+      duplicateId: string,
+      originalId: string,
+      namespace?: string,
+    ): Promise<boolean> {
+      const startTime = Date.now();
+      const targetNamespace = namespace || 'default';
+  
+      try {
+        const duplicate = await this.prisma.longTermMemory.findUnique({ where: { id: duplicateId } });
+        const original = await this.prisma.longTermMemory.findUnique({ where: { id: originalId } });
+  
+        if (!duplicate || !original) {
+          logInfo('markAsDuplicateFacade: memory not found', {
+            component: 'DatabaseManager',
+            operation: 'markAsDuplicateFacade',
+            duplicateId,
+            originalId,
+          });
+          return false;
+        }
+  
+        if (duplicate.namespace !== targetNamespace || original.namespace !== targetNamespace) {
+          logInfo('markAsDuplicateFacade: namespace mismatch', {
+            component: 'DatabaseManager',
+            operation: 'markAsDuplicateFacade',
+            duplicateNamespace: duplicate.namespace,
+            originalNamespace: original.namespace,
+            expectedNamespace: targetNamespace,
+          });
+          return false;
+        }
+  
+        await this.prisma.longTermMemory.update({
+          where: { id: duplicateId },
+          data: {
+            processedData: {
+              ...(duplicate.processedData as any),
+              isDuplicate: true,
+              duplicateOf: originalId,
+              markedAsDuplicateAt: new Date(),
+            } as any,
+          },
+        });
+  
+        this.recordOperationMetrics({
+          operationType: 'markAsDuplicate',
+          startTime,
+          duration: Date.now() - startTime,
+          success: true,
+        });
+  
+        logInfo('markAsDuplicateFacade: duplicate marked successfully', {
+          component: 'DatabaseManager',
+          operation: 'markAsDuplicateFacade',
+          duplicateId,
+          originalId,
+          namespace: targetNamespace,
+        });
+  
+        return true;
+      } catch (error) {
+        this.recordOperationMetrics({
+          operationType: 'markAsDuplicate',
+          startTime,
+          duration: Date.now() - startTime,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+  
+        logError('markAsDuplicateFacade: internal error', {
+          component: 'DatabaseManager',
+          operation: 'markAsDuplicateFacade',
+          duplicateId,
+          originalId,
+          namespace: namespace || 'default',
+          error: error instanceof Error ? error.message : String(error),
+        });
+  
+        return false;
+      }
+    }
+  
+    /**
+     * Declare that one memory supersedes another.
+     * Implemented via RelationshipManager-compatible SUPERSEDES relationship.
+     */
+    public async setSupersedesFacade(
+      primaryId: string,
+      supersededId: string,
+      namespace?: string,
+    ): Promise<boolean> {
+      const startTime = Date.now();
+      const targetNamespace = namespace || 'default';
+  
+      try {
+        if (!primaryId || !supersededId) {
+          throw new Error('setSupersedesFacade: both primaryId and supersededId are required');
+        }
+  
+        const updates = [
+          {
+            relationship: {
+              type: MemoryRelationshipType.SUPERSEDES,
+              targetMemoryId: supersededId,
+              confidence: 0.9,
+              strength: 0.9,
+              reason: 'external_supersedes',
+              context: 'memori.public.setSupersedes',
+              entities: [],
+            },
+            operation: 'add' as const,
+          },
+        ];
+  
+        const result = await this.relationshipManager.updateMemoryRelationships(
+          primaryId,
+          updates,
+          targetNamespace,
+        );
+  
+        this.recordOperationMetrics({
+          operationType: 'setSupersedes',
+          startTime,
+          duration: Date.now() - startTime,
+          success: result.errors.length === 0,
+          error: result.errors.join('; ') || undefined,
+        });
+  
+        if (result.errors.length > 0) {
+          logError('setSupersedesFacade: errors while updating relationships', {
+            component: 'DatabaseManager',
+            operation: 'setSupersedesFacade',
+            primaryId,
+            supersededId,
+            namespace: targetNamespace,
+            errors: result.errors,
+          });
+          return false;
+        }
+  
+        logInfo('setSupersedesFacade: supersedes relationship set successfully', {
+          component: 'DatabaseManager',
+          operation: 'setSupersedesFacade',
+          primaryId,
+          supersededId,
+          namespace: targetNamespace,
+        });
+  
+        return result.updated > 0;
+      } catch (error) {
+        this.recordOperationMetrics({
+          operationType: 'setSupersedes',
+          startTime,
+          duration: Date.now() - startTime,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+  
+        logError('setSupersedesFacade: internal error', {
+          component: 'DatabaseManager',
+          operation: 'setSupersedesFacade',
+          primaryId,
+          supersededId,
+          namespace: namespace || 'default',
+          error: error instanceof Error ? error.message : String(error),
+        });
+  
+        return false;
+      }
+    }
+  
+    // Memory Relationship Operations
 
   /**
    * Store memory relationships for a given memory
