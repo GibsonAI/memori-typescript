@@ -1,240 +1,208 @@
-# Search Strategies in Memorits
+# Search Strategies
 
-The search stack is implemented under `src/core/domain/search`. `Memori` and `MemoriAI` both delegate to the `SearchManager` / `SearchService` combination and ultimately return `MemorySearchResult` objects. This document explains what each strategy does and how to select it deliberately.
+This document explains how Memorits search strategies work and how to use them via stable public APIs.
 
-## Strategy Catalogue
+It is grounded in:
+- [`Memori.searchMemories`](src/core/Memori.ts:371)
+- [`Memori.searchMemoriesWithStrategy`](src/core/Memori.ts:385)
+- [`Memori.searchRecentMemories`](src/core/Memori.ts:443)
+- [`Memori.getAvailableSearchStrategies`](src/core/Memori.ts:435)
+- [`MemoriAI.searchMemories`](src/core/MemoriAI.ts:153)
+- [`MemoriAI.searchMemoriesWithStrategy`](src/core/MemoriAI.ts:293)
+- Search infrastructure under `src/core/infrastructure/database` and `src/core/domain/search`
 
-`SearchStrategy` is defined in `src/core/domain/search/types.ts`:
+Only behavior that exists in the codebase is documented here. Anything else should be treated as internal.
 
-```typescript
-enum SearchStrategy {
-  FTS5 = 'fts5',
-  LIKE = 'like',
-  RECENT = 'recent',
-  SEMANTIC = 'semantic',
-  CATEGORY_FILTER = 'category_filter',
-    TEMPORAL_FILTER = 'temporal_filter',
-    METADATA_FILTER = 'metadata_filter',
-    RELATIONSHIP = 'relationship'
-  }
-  ```
-  
-  ## Category and Hierarchy Support
-  
-  The search system provides sophisticated category management through the `CategoryMetadataExtractor` and `CategoryHierarchyManager` components. These work together to provide:
-  
-  ### Hierarchical Category Extraction
-  
-  The `CategoryMetadataExtractor` automatically detects categories from memory content and assigns them hierarchical paths:
-  
-  ```typescript
-  import { CategoryMetadataExtractor, CategoryHierarchyManager } from 'memorits';
-  
-  // Create hierarchy manager with category structure
-  const hierarchyManager = new CategoryHierarchyManager();
-  hierarchyManager.addCategory('Programming/Languages');
-  hierarchyManager.addCategory('Programming/Frameworks');
-  hierarchyManager.addCategory('Technology/Databases');
-  
-  // Create extractor with hierarchy integration
-  const extractor = new CategoryMetadataExtractor(hierarchyManager);
-  
-  // Extract categories with hierarchy paths
-  const result = await extractor.extractCategories({
-    content: 'I love working with Python and React for web development'
-  });
-  
-  console.log(result.categories[0]);
-  // {
-  //   name: 'Languages',
-  //   hierarchyPath: 'Programming/Languages', // ✅ Hierarchical context
-  //   confidence: 0.8,
-  //   source: 'pattern',
-  //   normalizedName: 'languages',
-  //   relevanceScore: 0.9
-  // }
-  ```
-  
-  ### Category Hierarchy Management
-  
-  The `CategoryHierarchyManager` provides advanced operations for working with category hierarchies:
-  
-  ```typescript
-  // Build hierarchy from category paths
-  const categories = ['Programming/Languages', 'Programming/Frameworks', 'Technology/Cloud'];
-  const root = hierarchyManager.buildHierarchy(categories);
-  
-  // Traverse hierarchy
-  const descendants = hierarchyManager.getDescendants('Programming');
-  // Returns: ['Languages', 'Frameworks'] and their children
-  
-  const ancestors = hierarchyManager.getAncestors('Languages');
-  // Returns: [{ name: 'Programming', fullPath: 'Programming', ... }]
-  
-  // Search and validation
-  const matches = hierarchyManager.searchCategories('frame', 5);
-  const validation = hierarchyManager.validateHierarchy();
-  ```
-  
-  ### Advanced Category Features
-  
-  - **Pattern-Based Hierarchy**: Automatic hierarchy suggestion based on extraction patterns
-  - **Virtual Hierarchies**: Support for categories not in the main hierarchy
-  - **Batch Processing**: Efficient hierarchy operations for multiple categories
-  - **Related Categories**: Smart suggestions based on hierarchy relationships
-  - **Validation**: Consistency checking for hierarchy structures
-  
-  ### Category-Based Search
-  
-  Use category filters with hierarchy awareness:
-  
-  ```typescript
-  // Search with category filtering
-  const results = await memori.searchMemories('JavaScript tutorial', {
-    includeMetadata: true,
-    strategy: SearchStrategy.CATEGORY_FILTER
-  });
-  
-  // Results include hierarchical category information
-  console.log(results[0].metadata.categories);
-  // [
-  //   {
-  //     name: 'Languages',
-  //     hierarchyPath: 'Programming/Languages',
-  //     confidence: 0.8,
-  //     relevanceScore: 0.9
-  //   }
-  // ]
-  ```
+---
 
-Each strategy lives in its own class (see `src/core/domain/search/strategies` and sibling folders) and is registered by `SearchService` when the necessary prerequisites are met (for example, the FTS5 strategy is skipped when SQLite lacks FTS5).
+## 1. Entry Points
 
-## Default Behaviour
+### 1.1 Using Memori
 
-`Memori.searchMemories(query, options)` chooses a strategy automatically:
+- Default search:
 
-- When FTS5 is available, keyword queries run through the FTS strategy.
-- Empty queries or those dominated by time filters fall back to the recent or temporal strategies.
-- The LIKE strategy is used as a fallback when FTS5 fails or is unavailable.
+```ts
+const results = await memori.searchMemories('deployment notes', {
+  limit: 20,
+  minImportance: 'medium',
+  includeMetadata: true,
+});
+```
 
-You will always receive an array of `MemorySearchResult` objects. When `includeMetadata` is `true`, the `metadata` field includes `searchScore`, `searchStrategy`, `memoryType`, and other diagnostic values.
+- Strategy-based search:
 
-## Selecting a Strategy Explicitly
-
-```typescript
-import { Memori, SearchStrategy } from 'memorits';
-
-const memori = new Memori({ databaseUrl: 'file:./memori.db' });
-await memori.enable();
+```ts
+import { SearchStrategy } from 'memorits'; // from public types if exported
 
 const results = await memori.searchMemoriesWithStrategy(
-  'vector indexing',
-  SearchStrategy.FTS5,
+  'incident report',
+  SearchStrategy.RECENT,
   {
-    limit: 20,
-    includeMetadata: true
-  }
-);
-```
-
-If a strategy throws, the `SearchManager` attempts a fallback, so you still receive results when possible. Check `metadata.searchStrategy` to see what executed in the end.
-
-## Temporal Filtering
-
-`TemporalFilterOptions` live in `src/core/types/models.ts`:
-
-```typescript
-const temporal = await memori.searchMemories('standup notes', {
-  limit: 10,
-  temporalFilters: {
-    relativeExpressions: ['last 7 days'],
-    absoluteDates: [new Date('2024-06-01')],
-    timeRanges: [
-      { start: new Date('2024-05-01'), end: new Date('2024-05-15') }
-    ]
-  }
-});
-```
-
-Supplying temporal filters automatically biases the strategy selection toward `TEMPORAL_FILTER` or `RECENT`. You can override this by passing `strategy: SearchStrategy.TEMPORAL_FILTER`.
-
-## Metadata Filtering
-
-```typescript
-const filtered = await memori.searchMemories('renewal', {
-  metadataFilters: {
-    fields: [
-      { key: 'metadata.topic', operator: 'eq', value: 'billing' },
-      { key: 'metadata.accountTier', operator: 'in', value: ['enterprise', 'pro'] }
-    ]
-  },
-  includeMetadata: true
-});
-```
-
-Metadata filters run through `MetadataFilterStrategy` and can be combined with the text query. When you need more expressive logic, use `filterExpression` which is parsed by `AdvancedFilterEngine`.
-
-```typescript
-const advanced = await memori.searchMemories('', {
-  filterExpression: 'importanceScore >= 0.7 AND metadata.topic = "operations"',
-  limit: 25
-});
-```
-
-## Relationship Search
-
-The relationship strategy traverses the relationship graph generated during memory processing.
-
-```typescript
-const related = await memori.searchMemoriesWithStrategy(
-  'incident response',
-  SearchStrategy.RELATIONSHIP,
-  {
-    limit: 15,
+    limit: 50,
     includeMetadata: true,
-    includeRelatedMemories: true,
-    maxRelationshipDepth: 2
   }
 );
 ```
 
-When `includeRelatedMemories` is `true`, additional related entries are appended to the result set. The underlying relationships come from `MemoryRelationship` objects stored in the database.
+- Recent helper:
 
-## Recent Memory Helper
-
-```typescript
+```ts
 const recent = await memori.searchRecentMemories(
   10,
   true,
-  {
-    relativeExpressions: ['today']
-  }
+  { relativeExpressions: ['last 24 hours'] }
 );
 ```
 
-This helper wraps the temporal strategy. It is exposed on `Memori` and internally calls `searchMemoriesWithStrategy` on your behalf.
+### 1.2 Using MemoriAI
 
-## Strategy Configuration
+MemoriAI forwards to Memori:
 
-`SearchStrategyConfigManager` (see `src/core/domain/search/SearchStrategyConfigManager.ts`) stores per-strategy configuration such as timeouts, scoring weights, and cache settings. Use `memori.getAvailableSearchStrategies()` to see what is active, and inspect the configuration manager if you need to adjust priorities or enable/disable strategies at runtime.
-
-## Error Handling and Fallbacks
-
-Strategies instrument their execution with `logInfo`/`logError` calls. When a strategy fails:
-
-1. The failure is logged with the component name `SearchManager`.
-2. `SearchManager` selects a fallback (usually LIKE) and re-runs the query.
-3. Error statistics are recorded so you can inspect performance later via `getIndexHealthReport`.
-
-Always wrap search calls in try/catch when building production systems:
-
-```typescript
-try {
-  const results = await memori.searchMemories('customer escalation');
-  // ...
-} catch (error) {
-  // Decide whether to surface the error or retry with relaxed filters
-}
+```ts
+const results = await memoriAI.searchMemories('project x', { limit: 10 });
+const withStrategy = await memoriAI.searchMemoriesWithStrategy('project x', strategy, { limit: 10 });
 ```
 
-Armed with this knowledge you can mix and match strategies to suit your use case while staying aligned with the actual implementation inside the repository.
+Use MemoriAI when you want a single object for chat + memory + search.
+
+---
+
+## 2. Discovering Supported Strategies
+
+Instead of hardcoding strategy names, use:
+
+```ts
+const strategies = await memori.getAvailableSearchStrategies();
+// or
+const strategies = await memoriAI.getAvailableSearchStrategies();
+```
+
+Treat this as the source of truth for what the current build supports.
+
+Reference:
+- [`Memori.getAvailableSearchStrategies`](src/core/Memori.ts:435)
+
+Recommended pattern:
+- Check `getAvailableSearchStrategies()` at startup.
+- Enable/disable features in your app based on what’s available.
+
+---
+
+## 3. Common Strategy Behaviors
+
+The exact list of strategies is implementation-defined. However, several behaviors are stable and relied upon by higher-level APIs.
+
+### 3.1 RECENT / Time-Aware Search
+
+Usage:
+- `Memori.searchRecentMemories`
+- `searchMemoriesWithStrategy` with a RECENT-like strategy (when available).
+
+Behavior:
+- Focuses on most recent memories in the target namespace.
+- Can combine with `TemporalFilterOptions` to constrain time windows.
+- Typical use cases:
+  - "What happened in the last 24h?"
+  - Dashboards and activity feeds.
+
+See:
+- [`docs/developer/advanced-features/temporal-filtering.md`](docs/developer/advanced-features/temporal-filtering.md)
+
+### 3.2 Temporal Filtering (Strategy-Agnostic)
+
+Enabled via `temporalFilters` in `SearchOptions`:
+
+- When a temporal-aware strategy is active:
+  - Filters / ranks using time intervals, relative expressions, etc.
+- When not:
+  - Temporal options may be ignored or used conservatively.
+
+Key points:
+- Represents supported behavior; callers should inspect metadata when `includeMetadata` is enabled to confirm which strategy ran.
+
+Details:
+- [`docs/developer/advanced-features/temporal-filtering.md`](docs/developer/advanced-features/temporal-filtering.md)
+
+### 3.3 Metadata Filtering
+
+Enabled via `metadataFilters` in `SearchOptions`:
+
+- Filters based on structured metadata stored with memories.
+- Supports operators such as `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `contains`, `like` according to the runtime implementation.
+
+Usage:
+- Narrow results for operational cases:
+  - Importance thresholds.
+  - Specific categories.
+  - Tenant/account-level filters.
+
+Details:
+- [`docs/developer/advanced-features/metadata-filtering.md`](docs/developer/advanced-features/metadata-filtering.md)
+
+---
+
+## 4. FTS5 vs LIKE Fallbacks
+
+The search layer is designed to support environments:
+
+- With FTS5 enabled:
+  - Strategies may use FTS5-backed virtual tables for efficient full-text search and ranking.
+- Without FTS5:
+  - Fallback to:
+    - Standard LIKE queries
+    - Other safe filters implemented in `SearchManager` / `SearchService`.
+
+Important:
+- As a caller, you SHOULD NOT depend on a specific underlying mechanism.
+- You SHOULD rely on these guarantees:
+  - Queries respect `namespace`, `limit`, documented filters.
+  - When FTS5 is unavailable, you still get functionally correct (if less sophisticated) results.
+- To detect FTS status, use the database/index health APIs rather than assuming availability.
+
+---
+
+## 5. Recommended Usage Patterns
+
+1. Basic keyword or general search:
+   - Use `searchMemories(query, { limit, minImportance })`.
+2. Time-focused:
+   - Use `searchRecentMemories` or a RECENT strategy.
+   - Optionally pass `temporalFilters`.
+3. Structured filters:
+   - Add `metadataFilters` and/or categories to narrow by metadata.
+4. Adaptive strategy selection:
+   - On startup, call `getAvailableSearchStrategies()`.
+   - Route advanced queries only through known strategies.
+5. Debugging behavior:
+   - Use `includeMetadata: true` to inspect:
+     - `searchStrategy`
+     - `searchScore`
+     - Any time or filter information surfaced in metadata.
+
+---
+
+## 6. Stability Notes
+
+Stable and recommended:
+- `Memori.searchMemories`
+- `Memori.searchMemoriesWithStrategy`
+- `Memori.searchRecentMemories`
+- `Memori.getAvailableSearchStrategies`
+- `MemoriAI.searchMemories`
+- `MemoriAI.searchMemoriesWithStrategy`
+- `SearchOptions` fields used in:
+  - [`docs/developer/api/search-api.md`](docs/developer/api/search-api.md)
+
+Advanced but supported:
+- Inspecting `MemorySearchResult.metadata` when `includeMetadata` is true.
+- Adapting behavior based on `getAvailableSearchStrategies()`.
+
+Internal / not guaranteed:
+- Direct imports from:
+  - `src/core/domain/search/**`
+  - `SearchManager`, `SearchService` implementations
+  - Concrete strategy classes
+
+If you build on internal classes, treat them as unstable and wrap them in your own abstraction.
+
+This document is intended to remain synchronized with the implementation; discrepancies should be corrected as documentation bugs.

@@ -9,8 +9,8 @@ Memorits supports three ingestion styles. Each mode maps to concrete behaviour i
 ### Automatic (default)
 
 - Enabled when `mode: 'automatic'` or `MEMORI_AUTO_INGEST=true`.
-- `MemoriAI.chat` calls `Memori.recordConversation` immediately after every provider response.
-- `Memori.enable()` ensures the providers and database manager are initialised before recording.
+- `MemoriAI.chat` uses its configured provider for inference and, in `mode: 'automatic'`, enables `Memori` (if needed) and calls `Memori.recordConversation` to persist the exchange ([`MemoriAI.chat`](src/core/MemoriAI.ts:97)).
+- `Memori` maps `mode` → `autoIngest` / `consciousIngest` in its constructor and `enable()` ensures providers and `DatabaseManager` are initialised before ingestion ([`Memori`](src/core/Memori.ts:36), [`Memori.enable`](src/core/Memori.ts:174)).
 - Use for assistants that should remember everything without additional wiring.
 
 ### Manual
@@ -48,7 +48,7 @@ Fields to note:
 - `isPermanentContext` – indicates the memory should persist across sessions.
 - References the originating conversation through `chatId`.
 
-The `DatabaseManager.storeShortTermMemory` path is used by `ConsciousAgent` when promoting context.
+Short-term memory promotion is handled via `ConsciousMemoryManager` and related helpers composed inside `DatabaseManager` (see conscious memory methods in [`DatabaseManager`](src/core/infrastructure/database/DatabaseManager.ts:741)).
 
 ### Long-Term Memory (`long_term_memory`)
 
@@ -113,8 +113,8 @@ await memori.checkForConsciousContextUpdates();
 
 ## Relationship Extraction and Duplication Control
 
-- Relationship extraction is toggled by `enableRelationshipExtraction` (`true` by default in `ConfigManager`).
-- Duplicate detection and consolidation live inside `Memori.findDuplicateMemories` and related helpers (see `src/core/Memori.ts` around the 700-line mark). Use them to prevent redundant long-term entries.
+- Relationship extraction is toggled by `enableRelationshipExtraction` (default comes from `MEMORI_ENABLE_RELATIONSHIP_EXTRACTION`, see [`ConfigManager`](src/core/infrastructure/config/ConfigManager.ts:56)).
+- Duplicate detection is exposed via `Memori.findDuplicateMemories` (delegating to `DuplicateManager` through `DatabaseManager`) ([`Memori.findDuplicateMemories`](src/core/Memori.ts:735)). Use this high-level API instead of relying on internal services.
 
 ```typescript
 const duplicates = await memori.findDuplicateMemories('mem_123', { similarityThreshold: 0.75 });
